@@ -29,28 +29,23 @@ jobs:
         id: check
         working-directory: sdk/python
         run: |
-          # Find the last commit that touched sdk/python other than a version bump
-          LAST_PUBLISH=$(git log --oneline --grep="chore: bump sdk version" -- . | head -1 | awk '{print $1}')
-          if [ -z "$LAST_PUBLISH" ]; then
-            echo "No previous publish commit found — will publish."
+          # Find the last SDK git tag as baseline
+          LAST_TAG=$(git tag --list 'sdk-v*' --sort=-version:refname | head -1)
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous sdk tag found — will publish."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
-            # Check if any sdk/python file (other than pyproject.toml version line) changed since then
-            CHANGED=$(git diff "$LAST_PUBLISH"..HEAD -- . \
-              ':(exclude)pyproject.toml' | wc -l | tr -d ' ')
-            # Also check pyproject.toml for non-version changes
-            TOML_CHANGED=$(git diff "$LAST_PUBLISH"..HEAD -- pyproject.toml \
-              | grep '^[+-]' | grep -v '^[+-][+-][+-]' | grep -v '^[+-]version' | wc -l | tr -d ' ')
-            if [ "$CHANGED" -gt 0 ] || [ "$TOML_CHANGED" -gt 0 ]; then
-              echo "SDK source changed — will publish."
+            CHANGED=$(git diff "$LAST_TAG"..HEAD -- . | wc -l | tr -d ' ')
+            if [ "$CHANGED" -gt 0 ]; then
+              echo "SDK changed since $LAST_TAG — will publish."
               echo "changed=true" >> "$GITHUB_OUTPUT"
             else
-              echo "No meaningful SDK changes since last publish — skipping."
+              echo "No SDK changes since $LAST_TAG — skipping."
               echo "changed=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
-      - name: Bump patch version
+      - name: Compute new version
         id: bump
         if: steps.check.outputs.changed == 'true'
         working-directory: sdk/python
@@ -60,19 +55,10 @@ jobs:
           MINOR=$(echo "$CURRENT" | cut -d. -f2)
           PATCH=$(echo "$CURRENT" | cut -d. -f3)
           NEW="$MAJOR.$MINOR.$((PATCH + 1))"
+          # Patch pyproject.toml in-place (no commit needed)
           sed -i "s/^version = \"$CURRENT\"/version = \"$NEW\"/" pyproject.toml
           echo "version=$NEW" >> "$GITHUB_OUTPUT"
           echo "Bumped $CURRENT → $NEW"
-
-      - name: Commit version bump
-        if: steps.check.outputs.changed == 'true'
-        working-directory: sdk/python
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml
-          git commit -m "chore: bump sdk version to ${{ steps.bump.outputs.version }} [skip ci]"
-          git push
 
       - name: Install build tools
         if: steps.check.outputs.changed == 'true'
@@ -88,3 +74,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: sdk/python/dist/
+
+      - name: Tag published version
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "sdk-v${{ steps.bump.outputs.version }}"
+          git push origin "sdk-v${{ steps.bump.outputs.version }}"
