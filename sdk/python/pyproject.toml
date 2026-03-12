@@ -4,19 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gradlog"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python SDK for Gradlog ML experiment tracking"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.8"
 authors = [
-    {name = "Efe Sirin - efesirin.com"}
+    {name = "Efe Sirin"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -51,6 +50,9 @@ Issues = "https://github.com/gradlog/gradlog/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["gradlog*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "gradlog.version.__version__"}
 
 [tool.black]
 line-length = 100

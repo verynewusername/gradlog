@@ -16,6 +16,7 @@ from gradlog.exceptions import (
     ValidationError,
 )
 from gradlog.project import Project
+from gradlog.version import __version__
 
 
 class Client:
@@ -56,7 +57,7 @@ class Client:
         if self.api_key:
             self._session.headers["Authorization"] = f"ApiKey {self.api_key}"
         self._session.headers["Content-Type"] = "application/json"
-        self._session.headers["User-Agent"] = "gradlog-python/0.1.0"
+        self._session.headers["User-Agent"] = f"gradlog-python/{__version__}"
 
     def _handle_response(self, response: requests.Response) -> requests.Response:
         """Handle API response and raise appropriate exceptions."""
