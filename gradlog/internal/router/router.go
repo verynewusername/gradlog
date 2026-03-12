@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -20,6 +21,21 @@ func Setup(cfg *config.Config, db *database.DB, store *storage.LocalStorage) *gi
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORS(cfg))
+
+	// In DEV_NOAUTH_EMAIL mode, upsert the synthetic dev user so that all
+	// DB foreign-key constraints (project_members, etc.) are satisfied.
+	if cfg.DevNoAuthEmail != "" && db != nil {
+		_, err := db.Pool.Exec(context.Background(), `
+			INSERT INTO users (id, email, name, picture_url, google_id, created_at, updated_at)
+			VALUES ($1, $2, 'Dev User', NULL, NULL, NOW(), NOW())
+			ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, updated_at = NOW()
+		`, middleware.DevNoAuthUserID(), cfg.DevNoAuthEmail)
+		if err != nil {
+			log.Printf("warning: could not upsert dev noauth user: %v", err)
+		} else {
+			log.Printf("DEV_NOAUTH_EMAIL: auto-authenticated as %q (id=%s)", cfg.DevNoAuthEmail, middleware.DevNoAuthUserID())
+		}
+	}
 
 	// Health check — no authentication required.
 	r.GET("/health", func(c *gin.Context) {
@@ -48,7 +64,7 @@ func Setup(cfg *config.Config, db *database.DB, store *storage.LocalStorage) *gi
 	// Authenticated routes
 	// ----------------------------------------------------------
 	protected := r.Group("/api/v1")
-	protected.Use(middleware.Auth(db))
+	protected.Use(middleware.Auth(db, cfg))
 	{
 		// Current-user endpoints.
 		protected.GET("/auth/me", authHandler.GetCurrentUser)

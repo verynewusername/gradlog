@@ -31,6 +31,11 @@ type Config struct {
 
 	// Frontend URL for CORS and redirects
 	FrontendURL string
+
+	// DevNoAuthEmail bypasses authentication in local development.
+	// When set, every request is treated as authenticated with this email.
+	// NEVER set this in production.
+	DevNoAuthEmail string
 }
 
 // Load reads configuration from environment variables.
@@ -49,6 +54,7 @@ func Load() (*Config, error) {
 		GoogleRedirectURL:   os.Getenv("GOOGLE_REDIRECT_URL"),
 		ArtifactStoragePath: getEnvOrDefault("ARTIFACT_STORAGE_PATH", "/data/artifacts"),
 		FrontendURL:         getEnvOrDefault("FRONTEND_URL", "http://localhost:3000"),
+		DevNoAuthEmail:      os.Getenv("DEV_NOAUTH_EMAIL"),
 	}
 
 	// Parse chunk size (default 50MB).
@@ -75,6 +81,10 @@ func Load() (*Config, error) {
 
 // validate checks that all required configuration values are present.
 func (c *Config) validate() error {
+	if c.DevNoAuthEmail != "" {
+		fmt.Printf("⚠️  DEV_NOAUTH_EMAIL is set — all requests will be authenticated as %q. Do NOT use in production.\n", c.DevNoAuthEmail)
+		return nil // DATABASE_URL not required in noauth mode (useful for pure UI testing)
+	}
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}

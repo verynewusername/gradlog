@@ -4,136 +4,326 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Gradlog</title>
-		<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M7 24V12l5 5 5-7 5 9' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+		<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M7 24V12l5 5 5-7 5 9' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+		<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 		<link rel="stylesheet" href="/styles.css" />
 	</head>
 	<body>
-		<!-- Auth screen (shown when not logged in) -->
+		<!-- Auth screen -->
 		<section id="authView" class="auth-screen hidden">
 			<div class="auth-card">
+				<div class="auth-logo">
+					<svg width="44" height="44" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M7 24V12l5 5 5-7 5 9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+				</div>
 				<h1 class="auth-title">Gradlog</h1>
-				<p class="auth-subtitle">ML experiment tracking</p>
+				<p class="auth-subtitle">ML experiment tracking &amp; collaboration</p>
 				<div class="auth-body">
 					<button id="oauthBtn" class="btn btn-primary btn-lg btn-full">
 						<svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.26c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
 						Continue with Google
 					</button>
-					<div class="divider"><span>or</span></div>
-					<form id="tokenForm" class="token-form">
-						<input id="tokenInput" type="password" placeholder="Paste API key or JWT" required />
-						<button class="btn btn-secondary" type="submit">Connect</button>
-					</form>
 				</div>
 				<p id="authHint" class="auth-hint"></p>
 			</div>
 		</section>
 
-		<!-- App (shown when logged in) -->
+		<!-- App -->
 		<section id="appView" class="app-shell hidden">
 			<!-- Top bar -->
 			<header class="topbar">
-				<span class="topbar-brand">gradlog</span>
+				<div class="topbar-left">
+					<svg class="topbar-logo" width="24" height="24" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M7 24V12l5 5 5-7 5 9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+					<span class="topbar-brand">gradlog</span>
+				</div>
 				<div class="topbar-actions">
 					<span id="statusBadge" class="badge badge-offline">Offline</span>
 					<button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme">
 						<svg class="icon-sun" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 1.78a1 1 0 011.415 1.415l-.708.707a1 1 0 11-1.414-1.414l.707-.708zM18 9a1 1 0 110 2h-1a1 1 0 110-2h1zM15.927 14.513a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4.22-.487l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 9a1 1 0 100 2H3a1 1 0 110-2h1zm.293-4.707a1 1 0 011.414 0l.707.707A1 1 0 015 6.414l-.707-.707a1 1 0 010-1.414zM10 7a3 3 0 100 6 3 3 0 000-6z"/></svg>
 						<svg class="icon-moon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
 					</button>
-					<button id="logoutBtn" class="btn btn-ghost btn-sm hidden">Log out</button>
+					<div id="userMenu" class="user-menu">
+						<button id="userMenuBtn" class="user-menu-btn" type="button">
+							<img id="userAvatar" class="avatar" src="" alt="" />
+							<span id="userName" class="user-name"></span>
+							<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+						</button>
+						<div id="userDropdown" class="user-dropdown hidden">
+							<div class="dropdown-header">
+								<span id="dropdownEmail" class="dropdown-email"></span>
+							</div>
+							<div class="dropdown-divider"></div>
+							<button id="logoutBtn" class="dropdown-item dropdown-item-danger" type="button">
+								<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"/></svg>
+								Sign out
+							</button>
+						</div>
+					</div>
 				</div>
 			</header>
 
 			<div class="app-body">
 				<!-- Sidebar -->
 				<nav class="sidebar">
-					<div class="sidebar-panel">
-						<h3 class="sidebar-label">Projects</h3>
-						<form id="projectForm" class="sf">
-							<input id="projectName" placeholder="Project name" required />
-							<input id="projectDesc" placeholder="Description" />
-							<button class="btn btn-primary btn-sm" type="submit">Create</button>
-						</form>
-						<ul id="projectList" class="nav-list"></ul>
+					<div class="sidebar-tabs">
+						<button class="sidebar-tab active" data-tab="projects">
+							<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+							Explorer
+						</button>
+						<button class="sidebar-tab" data-tab="settings">
+							<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+							Settings
+						</button>
 					</div>
-					<div class="sidebar-panel">
-						<h3 class="sidebar-label">Experiments</h3>
-						<form id="experimentForm" class="sf">
-							<input id="experimentName" placeholder="Experiment name" required />
-							<input id="experimentDesc" placeholder="Description" />
-							<button class="btn btn-primary btn-sm" type="submit">Create</button>
-						</form>
-						<ul id="experimentList" class="nav-list"></ul>
+
+					<!-- Projects tab -->
+					<div id="tabProjects" class="sidebar-tab-content active">
+						<div class="sidebar-panel">
+							<div class="sidebar-label-row">
+								<h3 class="sidebar-label">Projects</h3>
+								<button id="newProjectBtn" class="icon-btn-sm" title="New project">
+									<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+								</button>
+							</div>
+							<div id="projectFormWrap" class="sf-wrap hidden">
+								<form id="projectForm" class="sf">
+									<input id="projectName" placeholder="Project name" required />
+									<input id="projectDesc" placeholder="Description (optional)" />
+									<div class="sf-actions">
+										<button class="btn btn-primary btn-sm" type="submit">Create</button>
+										<button type="button" class="btn btn-ghost btn-sm" id="cancelProjectBtn">Cancel</button>
+									</div>
+								</form>
+							</div>
+							<ul id="projectList" class="nav-list"></ul>
+						</div>
+						<div class="sidebar-panel">
+							<div class="sidebar-label-row">
+								<h3 class="sidebar-label">Experiments</h3>
+								<button id="newExperimentBtn" class="icon-btn-sm" title="New experiment">
+									<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+								</button>
+							</div>
+							<div id="experimentFormWrap" class="sf-wrap hidden">
+								<form id="experimentForm" class="sf">
+									<input id="experimentName" placeholder="Experiment name" required />
+									<input id="experimentDesc" placeholder="Description (optional)" />
+									<div class="sf-actions">
+										<button class="btn btn-primary btn-sm" type="submit">Create</button>
+										<button type="button" class="btn btn-ghost btn-sm" id="cancelExperimentBtn">Cancel</button>
+									</div>
+								</form>
+							</div>
+							<ul id="experimentList" class="nav-list"></ul>
+						</div>
+						<div class="sidebar-panel">
+							<div class="sidebar-label-row">
+								<h3 class="sidebar-label">Runs</h3>
+							</div>
+							<ul id="runList" class="nav-list"></ul>
+						</div>
 					</div>
-					<div class="sidebar-panel">
-						<h3 class="sidebar-label">Runs</h3>
-						<form id="runForm" class="sf">
-							<input id="runName" placeholder="Run name" />
-							<textarea id="runParams" rows="2" placeholder='{"lr": 0.001}'></textarea>
-							<textarea id="runTags" rows="2" placeholder='{"stage": "train"}'></textarea>
-							<button class="btn btn-primary btn-sm" type="submit">Create Run</button>
-						</form>
-						<ul id="runList" class="nav-list"></ul>
+
+					<!-- Settings tab -->
+					<div id="tabSettings" class="sidebar-tab-content">
+						<div class="sidebar-panel">
+							<h3 class="sidebar-label">Settings</h3>
+							<ul class="settings-nav">
+								<li><button class="settings-nav-btn active" data-settings="members">
+									<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+									Team Members
+								</button></li>
+								<li><button class="settings-nav-btn" data-settings="apikeys">
+									<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"/></svg>
+									API Keys
+								</button></li>
+							</ul>
+						</div>
 					</div>
 				</nav>
 
 				<!-- Content -->
 				<main class="content">
-					<div class="card">
-						<h2 class="card-title">Run Details</h2>
-						<pre id="runMeta" class="run-meta">Select a run to view details.</pre>
-						<form id="runStatusForm" class="row">
-							<select id="runStatusSelect">
-								<option value="running">running</option>
-								<option value="completed">completed</option>
-								<option value="failed">failed</option>
-								<option value="killed">killed</option>
-							</select>
-							<button class="btn btn-secondary btn-sm" type="submit">Update</button>
-						</form>
-					</div>
+					<!-- Run details view -->
+					<div id="viewRun" class="view active">
+						<div class="content-header">
+							<div class="content-header-left">
+								<h1 id="contentTitle" class="content-title">Select a run</h1>
+								<span id="contentSubtitle" class="content-subtitle">Choose a project, experiment, and run from the sidebar</span>
+							</div>
+							<div id="runActions" class="content-header-right hidden">
+								<form id="runStatusForm" class="inline-form">
+									<select id="runStatusSelect" class="select-sm">
+										<option value="running">Running</option>
+										<option value="completed">Completed</option>
+										<option value="failed">Failed</option>
+										<option value="killed">Killed</option>
+									</select>
+									<button class="btn btn-secondary btn-sm" type="submit">Update</button>
+								</form>
+							</div>
+						</div>
 
-					<div class="card">
-						<h2 class="card-title">Metrics</h2>
-						<form id="metricForm" class="row">
-							<input id="metricKey" placeholder="Key" required />
-							<input id="metricValue" type="number" step="any" placeholder="Value" required />
-							<input id="metricStep" type="number" placeholder="Step" value="0" />
-							<button class="btn btn-primary btn-sm" type="submit">Log</button>
-						</form>
-						<div class="table-wrap">
-							<table class="tbl" id="metricTable">
-								<thead><tr><th>Key</th><th>Value</th><th>Step</th><th>Timestamp</th></tr></thead>
-								<tbody></tbody>
-							</table>
+						<!-- Run info cards -->
+						<div id="runInfoGrid" class="run-info-grid hidden">
+							<div class="info-card">
+								<div class="info-card-label">Status</div>
+								<div id="runInfoStatus" class="info-card-value"></div>
+							</div>
+							<div class="info-card">
+								<div class="info-card-label">Started</div>
+								<div id="runInfoStart" class="info-card-value"></div>
+							</div>
+							<div class="info-card">
+								<div class="info-card-label">Duration</div>
+								<div id="runInfoDuration" class="info-card-value"></div>
+							</div>
+							<div class="info-card">
+								<div class="info-card-label">Run ID</div>
+								<div id="runInfoId" class="info-card-value mono"></div>
+							</div>
+						</div>
+
+						<!-- Params & Tags -->
+						<div id="runParamsTags" class="params-tags-row hidden">
+							<div class="card card-compact">
+								<h3 class="card-title-sm">Parameters</h3>
+								<div id="runParamsDisplay" class="kv-grid"></div>
+							</div>
+							<div class="card card-compact">
+								<h3 class="card-title-sm">Tags</h3>
+								<div id="runTagsDisplay" class="kv-grid"></div>
+							</div>
+						</div>
+
+						<!-- Charts -->
+						<div id="chartsSection" class="card hidden">
+							<div class="card-header">
+								<h2 class="card-title">Metrics</h2>
+								<button id="refreshMetricsBtn" class="btn btn-ghost btn-sm">
+									<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+									Refresh
+								</button>
+							</div>
+							<div id="chartsContainer" class="charts-grid"></div>
+							<div id="metricsTableWrap" class="metrics-table-section">
+								<h3 class="card-title-sm" style="margin-top:16px">Latest Values</h3>
+								<div class="table-wrap">
+									<table class="tbl" id="metricTable">
+										<thead><tr><th>Key</th><th>Value</th><th>Step</th><th>Timestamp</th></tr></thead>
+										<tbody></tbody>
+									</table>
+								</div>
+							</div>
+						</div>
+
+						<!-- Artifacts -->
+						<div id="artifactsSection" class="card hidden">
+							<div class="card-header">
+								<h2 class="card-title">Artifacts</h2>
+								<label class="upload-btn">
+									<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+									Upload File
+									<input id="artifactFileInput" type="file" class="sr-only" />
+								</label>
+							</div>
+							<div id="uploadProgress" class="upload-progress hidden">
+								<div class="upload-progress-bar"><div id="uploadBar" class="upload-bar"></div></div>
+								<span id="uploadText" class="upload-text">Uploading...</span>
+							</div>
+							<div id="artifactList" class="artifact-grid"></div>
 						</div>
 					</div>
 
-					<div class="card">
-						<h2 class="card-title">Artifacts</h2>
-						<form id="artifactForm" class="sf" enctype="multipart/form-data">
-							<input id="artifactPath" placeholder="Path (optional)" />
-							<input id="artifactFile" type="file" required />
-							<button class="btn btn-primary btn-sm" type="submit">Upload</button>
-						</form>
-						<ul id="artifactList" class="nav-list"></ul>
+					<!-- Members view -->
+					<div id="viewMembers" class="view">
+						<div class="content-header">
+							<div>
+								<h1 class="content-title">Team Members</h1>
+								<span class="content-subtitle">Manage who has access to the currently selected project</span>
+							</div>
+						</div>
+						<div id="memberProjectScope" class="scope-banner scope-project">
+							<span class="scope-label">Project Scope</span>
+							<strong>No project selected</strong>
+						</div>
+						<div id="noProjectMembers" class="empty-state hidden">
+							<p>Select a project first to manage members.</p>
+						</div>
+						<div id="membersContent" class="card">
+							<div class="card-header">
+								<h2 class="card-title">Add Member</h2>
+							</div>
+							<form id="memberForm" class="member-form">
+								<div class="member-form-row">
+									<input id="memberEmail" type="email" placeholder="user@example.com" required />
+									<select id="memberRole">
+										<option value="member">Member</option>
+										<option value="admin">Admin</option>
+									</select>
+									<button class="btn btn-primary btn-sm" type="submit">Add</button>
+								</div>
+							</form>
+							<div id="memberList" class="member-list"></div>
+						</div>
 					</div>
 
-					<div class="card">
-						<h2 class="card-title">API Keys</h2>
-						<form id="apiKeyForm" class="row">
-							<input id="apiKeyName" placeholder="Key name" required />
-							<input id="apiKeyExpiry" type="number" min="1" placeholder="Expiry (days)" />
-							<button class="btn btn-primary btn-sm" type="submit">Create</button>
-						</form>
-						<div id="newKeyBox" class="key-display"></div>
-						<ul id="apiKeyList" class="nav-list"></ul>
+					<!-- API Keys view -->
+					<div id="viewApiKeys" class="view">
+						<div class="content-header">
+							<div>
+								<h1 class="content-title">API Keys</h1>
+								<span class="content-subtitle">Manage account-wide authentication tokens for SDK and CLI access</span>
+							</div>
+						</div>
+						<div id="apiKeyScope" class="scope-banner scope-account">
+							<span class="scope-label">Key Scope</span>
+							<strong>Account-wide</strong>
+							<span class="scope-note">The selected project does not change which API key is created.</span>
+						</div>
+						<div class="card">
+							<div class="card-header">
+								<h2 class="card-title">Create New Key</h2>
+							</div>
+							<form id="apiKeyForm" class="apikey-form">
+								<div class="apikey-form-row">
+									<input id="apiKeyName" placeholder="Key name (e.g. training-cluster)" required />
+									<input id="apiKeyExpiry" type="number" min="1" placeholder="Expiry (days)" style="max-width:140px" />
+									<button class="btn btn-primary btn-sm" type="submit">Create Key</button>
+								</div>
+							</form>
+							<div id="newKeyBox" class="new-key-box hidden">
+								<div class="new-key-header">
+									<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color:var(--green)"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+									<strong>Key created — copy it now, it won't be shown again</strong>
+								</div>
+								<div class="new-key-value">
+									<code id="newKeyValue"></code>
+									<button id="copyKeyBtn" class="btn btn-ghost btn-sm" type="button">Copy</button>
+								</div>
+							</div>
+							<div id="apiKeyList" class="apikey-list"></div>
+						</div>
 					</div>
 				</main>
 			</div>
 		</section>
+
+		<!-- Confirm dialog -->
+		<div id="confirmOverlay" class="modal-overlay hidden">
+			<div class="modal-card">
+				<div class="modal-header">
+					<h3 id="confirmTitle" class="modal-title">Confirm</h3>
+				</div>
+				<p id="confirmMessage" class="modal-message"></p>
+				<div class="modal-actions">
+					<button id="confirmCancel" class="btn btn-ghost" type="button">Cancel</button>
+					<button id="confirmOk" class="btn btn-danger" type="button">Delete</button>
+				</div>
+			</div>
+		</div>
 
 		<div id="toast" class="toast hidden"></div>
 		<script src="/app.js"></script>
