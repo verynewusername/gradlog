@@ -80,3 +80,4 @@ client = gradlog.Client()
 ## License
 
 MIT
+
