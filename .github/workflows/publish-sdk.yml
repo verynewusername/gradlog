@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "sdk/python/**"
+      - ".github/workflows/publish-sdk.yml"
+  workflow_dispatch:
 
 jobs:
   publish:
