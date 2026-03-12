@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gradlog - Test Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background: #1a1a2e;
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            font-size: 24px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-bottom: 15px;
+            color: #1a1a2e;
+            font-size: 18px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #1a1a2e;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #16213e;
+        }
+        .output {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+        }
+        .success {
+            color: #28a745;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Gradlog Test Interface</h1>
+            <p>Development testing interface for Gradlog API</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>Configuration</h2>
+            <div class="form-group">
+                <label>API Base URL</label>
+                <input type="text" id="baseUrl" value="http://localhost:8080" />
+            </div>
+            <div class="form-group">
+                <label>API Key (optional)</label>
+                <input type="text" id="apiKey" placeholder="gl_..." />
+            </div>
+            <button onclick="checkHealth()">Check Health</button>
+            <span id="healthStatus" class="status disconnected" style="margin-left: 10px;">Not connected</span>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Authentication</h2>
+                <button onclick="loginWithGoogle()">Login with Google</button>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label>Or use JWT Token</label>
+                    <input type="text" id="jwtToken" placeholder="JWT token..." />
+                </div>
+                <button onclick="getCurrentUser()">Get Current User</button>
+                <div id="userOutput" class="output" style="margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div class="card">
+                <h2>API Keys</h2>
+                <div class="form-group">
+                    <label>Key Name</label>
+                    <input type="text" id="keyName" placeholder="my-api-key" />
+                </div>
+                <button onclick="createApiKey()">Create API Key</button>
+                <button onclick="listApiKeys()">List API Keys</button>
+                <div id="apiKeyOutput" class="output" style="margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div class="card">
+                <h2>Projects</h2>
+                <div class="form-group">
+                    <label>Project Name</label>
+                    <input type="text" id="projectName" placeholder="my-project" />
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="projectDesc" placeholder="Project description..." />
+                </div>
+                <button onclick="createProject()">Create Project</button>
+                <button onclick="listProjects()">List Projects</button>
+                <div id="projectOutput" class="output" style="margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div class="card">
+                <h2>Experiments</h2>
+                <div class="form-group">
+                    <label>Project ID</label>
+                    <input type="text" id="expProjectId" placeholder="project-uuid" />
+                </div>
+                <div class="form-group">
+                    <label>Experiment Name</label>
+                    <input type="text" id="expName" placeholder="my-experiment" />
+                </div>
+                <button onclick="createExperiment()">Create Experiment</button>
+                <button onclick="listExperiments()">List Experiments</button>
+                <div id="expOutput" class="output" style="margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div class="card">
+                <h2>Runs</h2>
+                <div class="form-group">
+                    <label>Experiment ID</label>
+                    <input type="text" id="runExpId" placeholder="experiment-uuid" />
+                </div>
+                <div class="form-group">
+                    <label>Run Name</label>
+                    <input type="text" id="runName" placeholder="run-001" />
+                </div>
+                <button onclick="createRun()">Create Run</button>
+                <button onclick="listRuns()">List Runs</button>
+                <div id="runOutput" class="output" style="margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div class="card">
+                <h2>Metrics</h2>
+                <div class="form-group">
+                    <label>Run ID</label>
+                    <input type="text" id="metricRunId" placeholder="run-uuid" />
+                </div>
+                <div class="form-group">
+                    <label>Metric Key</label>
+                    <input type="text" id="metricKey" placeholder="loss" />
+                </div>
+                <div class="form-group">
+                    <label>Value</label>
+                    <input type="number" id="metricValue" placeholder="0.5" step="0.001" />
+                </div>
+                <div class="form-group">
+                    <label>Step</label>
+                    <input type="number" id="metricStep" placeholder="0" />
+                </div>
+                <button onclick="logMetric()">Log Metric</button>
+                <button onclick="getMetrics()">Get Metrics</button>
+                <div id="metricOutput" class="output" style="margin-top: 10px; display: none;"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Raw API Request</h2>
+            <div class="grid">
+                <div class="form-group">
+                    <label>Method</label>
+                    <select id="rawMethod">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Path</label>
+                    <input type="text" id="rawPath" placeholder="/api/v1/projects" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Request Body (JSON)</label>
+                <textarea id="rawBody" rows="4" placeholder='{"name": "test"}'></textarea>
+            </div>
+            <button onclick="sendRawRequest()">Send Request</button>
+            <div id="rawOutput" class="output" style="margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <script>
+        function getBaseUrl() {
+            return document.getElementById('baseUrl').value.replace(/\/$/, '');
+        }
+
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            const apiKey = document.getElementById('apiKey').value;
+            const jwtToken = document.getElementById('jwtToken').value;
+            
+            if (apiKey) {
+                headers['Authorization'] = `ApiKey ${apiKey}`;
+            } else if (jwtToken) {
+                headers['Authorization'] = `Bearer ${jwtToken}`;
+            }
+            return headers;
+        }
+
+        async function apiRequest(method, path, body = null) {
+            const options = {
+                method,
+                headers: getHeaders(),
+            };
+            if (body && method !== 'GET') {
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(`${getBaseUrl()}${path}`, options);
+            const data = await response.json().catch(() => ({}));
+            return { status: response.status, data };
+        }
+
+        function showOutput(elementId, data) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'block';
+            el.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${getBaseUrl()}/health`);
+                const data = await response.json();
+                const status = document.getElementById('healthStatus');
+                if (response.ok) {
+                    status.className = 'status connected';
+                    status.textContent = 'Connected';
+                } else {
+                    status.className = 'status disconnected';
+                    status.textContent = 'Error';
+                }
+            } catch (e) {
+                const status = document.getElementById('healthStatus');
+                status.className = 'status disconnected';
+                status.textContent = 'Disconnected';
+            }
+        }
+
+        function loginWithGoogle() {
+            window.open(`${getBaseUrl()}/api/v1/auth/google/login`, '_blank');
+        }
+
+        async function getCurrentUser() {
+            const result = await apiRequest('GET', '/api/v1/auth/me');
+            showOutput('userOutput', result);
+        }
+
+        async function createApiKey() {
+            const name = document.getElementById('keyName').value;
+            const result = await apiRequest('POST', '/api/v1/api-keys', { name });
+            showOutput('apiKeyOutput', result);
+        }
+
+        async function listApiKeys() {
+            const result = await apiRequest('GET', '/api/v1/api-keys');
+            showOutput('apiKeyOutput', result);
+        }
+
+        async function createProject() {
+            const name = document.getElementById('projectName').value;
+            const description = document.getElementById('projectDesc').value;
+            const result = await apiRequest('POST', '/api/v1/projects', { name, description });
+            showOutput('projectOutput', result);
+        }
+
+        async function listProjects() {
+            const result = await apiRequest('GET', '/api/v1/projects');
+            showOutput('projectOutput', result);
+        }
+
+        async function createExperiment() {
+            const projectId = document.getElementById('expProjectId').value;
+            const name = document.getElementById('expName').value;
+            const result = await apiRequest('POST', `/api/v1/projects/${projectId}/experiments`, { name });
+            showOutput('expOutput', result);
+        }
+
+        async function listExperiments() {
+            const projectId = document.getElementById('expProjectId').value;
+            const result = await apiRequest('GET', `/api/v1/projects/${projectId}/experiments`);
+            showOutput('expOutput', result);
+        }
+
+        async function createRun() {
+            const experimentId = document.getElementById('runExpId').value;
+            const name = document.getElementById('runName').value;
+            const result = await apiRequest('POST', `/api/v1/experiments/${experimentId}/runs`, { name });
+            showOutput('runOutput', result);
+        }
+
+        async function listRuns() {
+            const experimentId = document.getElementById('runExpId').value;
+            const result = await apiRequest('GET', `/api/v1/experiments/${experimentId}/runs`);
+            showOutput('runOutput', result);
+        }
+
+        async function logMetric() {
+            const runId = document.getElementById('metricRunId').value;
+            const key = document.getElementById('metricKey').value;
+            const value = parseFloat(document.getElementById('metricValue').value);
+            const step = parseInt(document.getElementById('metricStep').value) || 0;
+            const result = await apiRequest('POST', `/api/v1/runs/${runId}/metrics`, { key, value, step });
+            showOutput('metricOutput', result);
+        }
+
+        async function getMetrics() {
+            const runId = document.getElementById('metricRunId').value;
+            const result = await apiRequest('GET', `/api/v1/runs/${runId}/metrics`);
+            showOutput('metricOutput', result);
+        }
+
+        async function sendRawRequest() {
+            const method = document.getElementById('rawMethod').value;
+            const path = document.getElementById('rawPath').value;
+            const bodyText = document.getElementById('rawBody').value;
+            let body = null;
+            if (bodyText) {
+                try {
+                    body = JSON.parse(bodyText);
+                } catch (e) {
+                    showOutput('rawOutput', { error: 'Invalid JSON in request body' });
+                    return;
+                }
+            }
+            const result = await apiRequest(method, path, body);
+            showOutput('rawOutput', result);
+        }
+
+        // Check health on load
+        checkHealth();
+
+        // Check for token in URL (OAuth callback)
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        if (token) {
+            document.getElementById('jwtToken').value = token;
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    </script>
+</body>
+</html>

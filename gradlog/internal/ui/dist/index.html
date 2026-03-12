@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Gradlog</title>
+		<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M7 24V12l5 5 5-7 5 9' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+		<link rel="stylesheet" href="/styles.css" />
+	</head>
+	<body>
+		<!-- Auth screen (shown when not logged in) -->
+		<section id="authView" class="auth-screen hidden">
+			<div class="auth-card">
+				<h1 class="auth-title">Gradlog</h1>
+				<p class="auth-subtitle">ML experiment tracking</p>
+				<div class="auth-body">
+					<button id="oauthBtn" class="btn btn-primary btn-lg btn-full">
+						<svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.26c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+						Continue with Google
+					</button>
+					<div class="divider"><span>or</span></div>
+					<form id="tokenForm" class="token-form">
+						<input id="tokenInput" type="password" placeholder="Paste API key or JWT" required />
+						<button class="btn btn-secondary" type="submit">Connect</button>
+					</form>
+				</div>
+				<p id="authHint" class="auth-hint"></p>
+			</div>
+		</section>
+
+		<!-- App (shown when logged in) -->
+		<section id="appView" class="app-shell hidden">
+			<!-- Top bar -->
+			<header class="topbar">
+				<span class="topbar-brand">gradlog</span>
+				<div class="topbar-actions">
+					<span id="statusBadge" class="badge badge-offline">Offline</span>
+					<button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme">
+						<svg class="icon-sun" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 1.78a1 1 0 011.415 1.415l-.708.707a1 1 0 11-1.414-1.414l.707-.708zM18 9a1 1 0 110 2h-1a1 1 0 110-2h1zM15.927 14.513a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4.22-.487l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 9a1 1 0 100 2H3a1 1 0 110-2h1zm.293-4.707a1 1 0 011.414 0l.707.707A1 1 0 015 6.414l-.707-.707a1 1 0 010-1.414zM10 7a3 3 0 100 6 3 3 0 000-6z"/></svg>
+						<svg class="icon-moon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+					</button>
+					<button id="logoutBtn" class="btn btn-ghost btn-sm hidden">Log out</button>
+				</div>
+			</header>
+
+			<div class="app-body">
+				<!-- Sidebar -->
+				<nav class="sidebar">
+					<div class="sidebar-panel">
+						<h3 class="sidebar-label">Projects</h3>
+						<form id="projectForm" class="sf">
+							<input id="projectName" placeholder="Project name" required />
+							<input id="projectDesc" placeholder="Description" />
+							<button class="btn btn-primary btn-sm" type="submit">Create</button>
+						</form>
+						<ul id="projectList" class="nav-list"></ul>
+					</div>
+					<div class="sidebar-panel">
+						<h3 class="sidebar-label">Experiments</h3>
+						<form id="experimentForm" class="sf">
+							<input id="experimentName" placeholder="Experiment name" required />
+							<input id="experimentDesc" placeholder="Description" />
+							<button class="btn btn-primary btn-sm" type="submit">Create</button>
+						</form>
+						<ul id="experimentList" class="nav-list"></ul>
+					</div>
+					<div class="sidebar-panel">
+						<h3 class="sidebar-label">Runs</h3>
+						<form id="runForm" class="sf">
+							<input id="runName" placeholder="Run name" />
+							<textarea id="runParams" rows="2" placeholder='{"lr": 0.001}'></textarea>
+							<textarea id="runTags" rows="2" placeholder='{"stage": "train"}'></textarea>
+							<button class="btn btn-primary btn-sm" type="submit">Create Run</button>
+						</form>
+						<ul id="runList" class="nav-list"></ul>
+					</div>
+				</nav>
+
+				<!-- Content -->
+				<main class="content">
+					<div class="card">
+						<h2 class="card-title">Run Details</h2>
+						<pre id="runMeta" class="run-meta">Select a run to view details.</pre>
+						<form id="runStatusForm" class="row">
+							<select id="runStatusSelect">
+								<option value="running">running</option>
+								<option value="completed">completed</option>
+								<option value="failed">failed</option>
+								<option value="killed">killed</option>
+							</select>
+							<button class="btn btn-secondary btn-sm" type="submit">Update</button>
+						</form>
+					</div>
+
+					<div class="card">
+						<h2 class="card-title">Metrics</h2>
+						<form id="metricForm" class="row">
+							<input id="metricKey" placeholder="Key" required />
+							<input id="metricValue" type="number" step="any" placeholder="Value" required />
+							<input id="metricStep" type="number" placeholder="Step" value="0" />
+							<button class="btn btn-primary btn-sm" type="submit">Log</button>
+						</form>
+						<div class="table-wrap">
+							<table class="tbl" id="metricTable">
+								<thead><tr><th>Key</th><th>Value</th><th>Step</th><th>Timestamp</th></tr></thead>
+								<tbody></tbody>
+							</table>
+						</div>
+					</div>
+
+					<div class="card">
+						<h2 class="card-title">Artifacts</h2>
+						<form id="artifactForm" class="sf" enctype="multipart/form-data">
+							<input id="artifactPath" placeholder="Path (optional)" />
+							<input id="artifactFile" type="file" required />
+							<button class="btn btn-primary btn-sm" type="submit">Upload</button>
+						</form>
+						<ul id="artifactList" class="nav-list"></ul>
+					</div>
+
+					<div class="card">
+						<h2 class="card-title">API Keys</h2>
+						<form id="apiKeyForm" class="row">
+							<input id="apiKeyName" placeholder="Key name" required />
+							<input id="apiKeyExpiry" type="number" min="1" placeholder="Expiry (days)" />
+							<button class="btn btn-primary btn-sm" type="submit">Create</button>
+						</form>
+						<div id="newKeyBox" class="key-display"></div>
+						<ul id="apiKeyList" class="nav-list"></ul>
+					</div>
+				</main>
+			</div>
+		</section>
+
+		<div id="toast" class="toast hidden"></div>
+		<script src="/app.js"></script>
+	</body>
+</html>

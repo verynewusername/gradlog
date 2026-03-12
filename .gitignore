@@ -1,0 +1,46 @@
+# ── Secrets & environment ────────────────────────────────────────────────────
+gradlog/.env
+.env
+.env.*
+!.env.example
+
+# ── Go ───────────────────────────────────────────────────────────────────────
+gradlog/gradlog
+gradlog/*.exe
+gradlog/*.test
+gradlog/vendor/
+*.prof
+
+# ── Legacy Standalone Frontend ──────────────────────────────────────────────
+frontend/
+
+# ── Python SDK ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+!gradlog/internal/ui/dist/
+!gradlog/internal/ui/dist/**
+build/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# Local data volumes (if bind-mounted instead of named volumes)
+data/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
