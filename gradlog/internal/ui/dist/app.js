@@ -1,8 +1,10 @@
 (() => {
   const TOKEN_KEY = "gradlog_token";
+  const THEME_KEY = "gradlog_theme";
 
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || "",
+    theme: "light",
     me: null,
     projects: [],
     experiments: [],
@@ -22,6 +24,7 @@
     tokenForm: document.getElementById("tokenForm"),
     tokenInput: document.getElementById("tokenInput"),
     authHint: document.getElementById("authHint"),
+    themeToggle: document.getElementById("themeToggle"),
     logoutBtn: document.getElementById("logoutBtn"),
     statusBadge: document.getElementById("statusBadge"),
     toast: document.getElementById("toast"),
@@ -65,9 +68,25 @@
 
   function toast(message, isError = false) {
     el.toast.textContent = message;
-    el.toast.style.borderColor = isError ? "#ff5d73" : "#2b4254";
+    el.toast.classList.toggle("toast-error", isError);
     el.toast.classList.remove("hidden");
     setTimeout(() => el.toast.classList.add("hidden"), 2600);
+  }
+
+  function setTheme(nextTheme) {
+    state.theme = nextTheme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", state.theme);
+    localStorage.setItem(THEME_KEY, state.theme);
+  }
+
+  function initTheme() {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === "light" || stored === "dark") {
+      setTheme(stored);
+      return;
+    }
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setTheme(prefersDark ? "dark" : "light");
   }
 
   async function api(path, options = {}) {
@@ -94,7 +113,10 @@
     el.authView.classList.toggle("hidden", authed);
     el.appView.classList.toggle("hidden", !authed);
     el.logoutBtn.classList.toggle("hidden", !authed);
-    el.statusBadge.textContent = authed && state.me ? `Signed in as ${state.me.email}` : "Disconnected";
+    const online = authed && state.me;
+    el.statusBadge.textContent = online ? state.me.email : "Disconnected";
+    el.statusBadge.classList.toggle("badge-online", !!online);
+    el.statusBadge.classList.toggle("badge-offline", !online);
   }
 
   function parseJSONOrEmpty(text, fieldName) {
@@ -248,14 +270,31 @@
   }
 
   function renderRuns() {
-    renderSelectableList(
-      el.runList,
-      state.runs,
-      state.selectedRunId,
-      (r) => `${r.name || "Unnamed run"} (${r.status})`,
-      selectRun,
-      (run) => [runStatusButton(run, "completed")]
-    );
+    el.runList.innerHTML = "";
+    if (!state.runs.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "No runs yet.";
+      el.runList.appendChild(li);
+      return;
+    }
+
+    state.runs.forEach((run) => {
+      const li = document.createElement("li");
+      li.className = `item-row ${run.id === state.selectedRunId ? "active" : ""}`;
+
+      const left = document.createElement("button");
+      left.className = "btn btn-ghost";
+      left.innerHTML = `${run.name || "Unnamed run"} <span class="status-pill status-${run.status}">${run.status}</span>`;
+      left.onclick = () => selectRun(run.id);
+
+      const actions = document.createElement("div");
+      actions.appendChild(runStatusButton(run, "completed"));
+
+      li.appendChild(left);
+      li.appendChild(actions);
+      el.runList.appendChild(li);
+    });
   }
 
   async function selectRun(id) {
@@ -275,21 +314,27 @@
 
   function renderRunDetails(run) {
     if (!run) {
-      el.runMeta.textContent = "Select a run to view details.";
+      el.runMeta.innerHTML = '<span class="hint">Select a run to view details.</span>';
       el.metricTableBody.innerHTML = "";
       el.artifactList.innerHTML = "";
       return;
     }
 
-    el.runMeta.textContent = [
-      `Run: ${run.name || "Unnamed run"}`,
-      `ID: ${run.id}`,
-      `Status: ${run.status}`,
-      `Start: ${timeFmt(run.start_time)}`,
-      `End: ${timeFmt(run.end_time)}`,
-      `Params: ${JSON.stringify(run.params || {}, null, 2)}`,
-      `Tags: ${JSON.stringify(run.tags || {}, null, 2)}`,
-    ].join("\n");
+    const esc = (s) => {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    };
+    el.runMeta.innerHTML = `
+      <div class="run-detail-grid">
+        <div class="run-detail-item"><strong>Run</strong><span>${esc(run.name || "Unnamed run")}</span></div>
+        <div class="run-detail-item"><strong>Status</strong><span class="status-pill status-${esc(run.status)}">${esc(run.status)}</span></div>
+        <div class="run-detail-item"><strong>ID</strong><code>${esc(run.id)}</code></div>
+        <div class="run-detail-item"><strong>Started</strong><span>${esc(timeFmt(run.start_time))}</span></div>
+        <div class="run-detail-item"><strong>Ended</strong><span>${esc(timeFmt(run.end_time))}</span></div>
+      </div>
+      <details><summary>Params</summary><pre>${esc(JSON.stringify(run.params || {}, null, 2))}</pre></details>
+      <details><summary>Tags</summary><pre>${esc(JSON.stringify(run.tags || {}, null, 2))}</pre></details>`;
   }
 
   function renderMetrics() {
@@ -418,6 +463,12 @@
   }
 
   function bindEvents() {
+    if (el.themeToggle) {
+      el.themeToggle.onclick = () => {
+        setTheme(state.theme === "dark" ? "light" : "dark");
+      };
+    }
+
     el.oauthBtn.onclick = () => {
       window.location.href = "/api/v1/auth/google/login";
     };
@@ -597,6 +648,7 @@
 
   async function init() {
     handleOAuthCallback();
+    initTheme();
     bindEvents();
     if (state.token) {
       await bootstrapAuthed();
