@@ -2,11 +2,11 @@
 
 Self-hosted ML experiment tracker.
 
-Gradlog runs as a single backend service (Go + Gin + Postgres) and can serve the website directly from the same container. You do not need Cloudflare Pages when deploying this way.
+Gradlog runs as a single service (Go + Gin + Postgres) and can serve the website directly from the same container. You do not need Cloudflare Pages when deploying this way.
 
 ## Architecture
 
-- Backend API: Go/Gin
+- API + Web server: Go/Gin
 - Database: PostgreSQL 17
 - Auth: opaque API/session tokens (no JWT)
 - UI hosting: static frontend files served by backend
@@ -16,10 +16,10 @@ Gradlog runs as a single backend service (Go + Gin + Postgres) and can serve the
 1. Copy env template:
 
 ```bash
-cp backend/.env.example backend/.env
+cp gradlog/.env.example gradlog/.env
 ```
 
-2. Edit `backend/.env` with your values.
+2. Edit `gradlog/.env` with your values.
 
 3. Build and start:
 
@@ -34,13 +34,13 @@ docker compose up --build
 
 ## Frontend Served By Backend
 
-The backend binary embeds static files under `backend/internal/ui/dist` and serves them for non-API routes.
+The gradlog binary embeds static files under `gradlog/internal/ui/dist` and serves them for non-API routes.
 
-In the current Docker setup, `frontend/` is copied into `backend/internal/ui/dist/` during image build. This means a single backend container serves both API and website.
+In the current setup, UI files are committed under `gradlog/internal/ui/dist` and embedded at build time. This means a single container serves both API and website.
 
 ## Google OAuth (Optional)
 
-If you enable Google OAuth, set these values in `backend/.env`:
+If you enable Google OAuth, set these values in `gradlog/.env`:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`

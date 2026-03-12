@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Gradlog</title>
+		<link rel="stylesheet" href="/styles.css" />
+	</head>
+	<body>
+		<div class="bg-glow bg-glow-a"></div>
+		<div class="bg-glow bg-glow-b"></div>
+
+		<header class="topbar">
+			<div class="brand-wrap">
+				<div class="brand-mark">G</div>
+				<div>
+					<h1>Gradlog</h1>
+					<p>Experiment Tracking Workspace</p>
+				</div>
+			</div>
+			<div class="top-actions">
+				<span id="statusBadge" class="badge">Disconnected</span>
+				<button id="logoutBtn" class="btn btn-ghost hidden">Log Out</button>
+			</div>
+		</header>
+
+		<main class="page">
+			<section id="authView" class="card auth-card hidden">
+				<h2>Sign In</h2>
+				<p>Use Google OAuth or paste an API token.</p>
+				<div class="auth-actions">
+					<button id="oauthBtn" class="btn btn-primary">Continue With Google</button>
+					<form id="tokenForm" class="inline-form">
+						<input id="tokenInput" type="password" placeholder="Paste token (gl_...)" required />
+						<button class="btn btn-secondary" type="submit">Use Token</button>
+					</form>
+				</div>
+				<div id="authHint" class="hint"></div>
+			</section>
+
+			<section id="appView" class="app-grid hidden">
+				<aside class="card panel">
+					<h3>Projects</h3>
+					<form id="projectForm" class="stack-form">
+						<input id="projectName" placeholder="Project name" required />
+						<input id="projectDesc" placeholder="Description (optional)" />
+						<button class="btn btn-secondary" type="submit">Create Project</button>
+					</form>
+					<ul id="projectList" class="item-list"></ul>
+				</aside>
+
+				<section class="card panel">
+					<h3>Experiments</h3>
+					<form id="experimentForm" class="stack-form">
+						<input id="experimentName" placeholder="Experiment name" required />
+						<input id="experimentDesc" placeholder="Description (optional)" />
+						<button class="btn btn-secondary" type="submit">Create Experiment</button>
+					</form>
+					<ul id="experimentList" class="item-list"></ul>
+				</section>
+
+				<section class="card panel">
+					<h3>Runs</h3>
+					<form id="runForm" class="stack-form">
+						<input id="runName" placeholder="Run name (optional)" />
+						<textarea id="runParams" placeholder='Params JSON (optional), e.g. {"lr":0.001}'></textarea>
+						<textarea id="runTags" placeholder='Tags JSON (optional), e.g. {"stage":"train"}'></textarea>
+						<button class="btn btn-secondary" type="submit">Create Run</button>
+					</form>
+					<ul id="runList" class="item-list"></ul>
+				</section>
+
+				<section class="card panel span-2">
+					<h3>Run Details & Metrics</h3>
+					<div id="runMeta" class="meta-box">Select a run to view details.</div>
+					<form id="runStatusForm" class="inline-form">
+						<select id="runStatusSelect">
+							<option value="running">running</option>
+							<option value="completed">completed</option>
+							<option value="failed">failed</option>
+							<option value="killed">killed</option>
+						</select>
+						<button class="btn btn-secondary" type="submit">Update Status</button>
+					</form>
+
+					<form id="metricForm" class="inline-form metric-form">
+						<input id="metricKey" placeholder="metric key" required />
+						<input id="metricValue" type="number" step="any" placeholder="value" required />
+						<input id="metricStep" type="number" placeholder="step" value="0" />
+						<button class="btn btn-secondary" type="submit">Log Metric</button>
+					</form>
+
+					<table class="table" id="metricTable">
+						<thead>
+							<tr><th>Key</th><th>Value</th><th>Step</th><th>Timestamp</th></tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</section>
+
+				<section class="card panel">
+					<h3>Artifacts</h3>
+					<form id="artifactForm" class="stack-form" enctype="multipart/form-data">
+						<input id="artifactPath" placeholder="Artifact path (optional)" />
+						<input id="artifactFile" type="file" required />
+						<button class="btn btn-secondary" type="submit">Upload Artifact</button>
+					</form>
+					<ul id="artifactList" class="item-list"></ul>
+				</section>
+
+				<section class="card panel">
+					<h3>API Keys</h3>
+					<form id="apiKeyForm" class="inline-form">
+						<input id="apiKeyName" placeholder="Key name" required />
+						<input id="apiKeyExpiry" type="number" min="1" placeholder="Expiry days (optional)" />
+						<button class="btn btn-secondary" type="submit">Create Key</button>
+					</form>
+					<div id="newKeyBox" class="hint"></div>
+					<ul id="apiKeyList" class="item-list"></ul>
+				</section>
+			</section>
+		</main>
+
+		<div id="toast" class="toast hidden"></div>
+		<script src="/app.js"></script>
+	</body>
+</html>

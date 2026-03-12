@@ -1,15 +1,18 @@
 # ── Secrets & environment ────────────────────────────────────────────────────
-backend/.env
+gradlog/.env
 .env
 .env.*
 !.env.example
 
 # ── Go ───────────────────────────────────────────────────────────────────────
-backend/gradlog
-backend/*.exe
-backend/*.test
-backend/vendor/
+gradlog/gradlog
+gradlog/*.exe
+gradlog/*.test
+gradlog/vendor/
 *.prof
+
+# ── Legacy Standalone Frontend ──────────────────────────────────────────────
+frontend/
 
 # ── Python SDK ───────────────────────────────────────────────────────────────
 __pycache__/
@@ -18,6 +21,8 @@ __pycache__/
 *.pyd
 *.egg-info/
 dist/
+!gradlog/internal/ui/dist/
+!gradlog/internal/ui/dist/**
 build/
 .eggs/
 .venv/

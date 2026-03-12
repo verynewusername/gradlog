@@ -2,11 +2,11 @@
 # This file sets up the complete Gradlog stack for local development.
 #
 # Usage:
-#   cp backend/.env.example backend/.env
-#   # Edit backend/.env with your configuration
+#   cp gradlog/.env.example gradlog/.env
+#   # Edit gradlog/.env with your configuration
 #   docker-compose up -d
 #
-# The backend will be available at http://localhost:8080
+# The gradlog service will be available at http://localhost:8080
 
 services:
   # PostgreSQL database
@@ -28,12 +28,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # Gradlog backend API
-  backend:
+  # Gradlog API + Web UI
+  gradlog:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: gradlog-backend
+      context: ./gradlog
+      dockerfile: Dockerfile
+    container_name: gradlog
     restart: unless-stopped
     depends_on:
       postgres:
@@ -42,7 +42,7 @@ services:
       - "8080:8080"
     volumes:
       # Mount .env file for configuration
-      - ./backend/.env:/app/.env:ro
+      - ./gradlog/.env:/app/.env:ro
       # Mount artifact storage directory
       - artifact_data:/data/artifacts
     environment:

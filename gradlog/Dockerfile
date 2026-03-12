@@ -1,21 +1,17 @@
 # Build stage
 FROM golang:1.23-alpine AS builder
 
-WORKDIR /app/backend
+WORKDIR /app
 
 # Install build dependencies.
 RUN apk add --no-cache git ca-certificates
 
 # Copy go mod files first for better caching.
-COPY backend/go.mod backend/go.sum* ./
+COPY go.mod go.sum* ./
 RUN go mod download
 
-# Copy backend source code.
-COPY backend/ ./
-
-# Copy frontend static files into the embedded UI directory.
-# These files are served by the Go binary via go:embed.
-COPY frontend/ ./internal/ui/dist/
+# Copy source code.
+COPY . .
 
 # Build the binary with embedded migrations.
 # CGO is disabled for a fully static binary.

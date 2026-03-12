@@ -5,23 +5,23 @@ all: build
 
 # Install dependencies
 deps:
-	cd backend && go mod download && go mod tidy
+	cd gradlog && go mod download && go mod tidy
 
 # Build the backend binary
 build:
-	cd backend && go build -o bin/gradlog ./cmd/gradlog
+	cd gradlog && go build -o bin/gradlog ./cmd/gradlog
 
 # Run the backend locally (requires PostgreSQL)
 run:
-	cd backend && go run ./cmd/gradlog
+	cd gradlog && go run ./cmd/gradlog
 
 # Run tests
 test:
-	cd backend && go test -v ./...
+	cd gradlog && go test -v ./...
 
 # Clean build artifacts
 clean:
-	rm -rf backend/bin
+	rm -rf gradlog/bin
 
 # Docker operations
 docker-build:
@@ -38,13 +38,13 @@ docker-logs:
 
 # Development setup
 dev-setup:
-	cp backend/.env.example backend/.env
-	@echo "Edit backend/.env with your configuration"
+	cp gradlog/.env.example gradlog/.env
+	@echo "Edit gradlog/.env with your configuration"
 	@echo "Then run: make docker-up"
 
 # Database operations (requires running PostgreSQL)
 db-migrate:
-	cd backend && go run ./cmd/gradlog migrate
+	cd gradlog && go run ./cmd/gradlog migrate
 
 # SDK operations
 sdk-install:
@@ -58,10 +58,10 @@ sdk-build:
 
 # Lint
 lint:
-	cd backend && go vet ./...
+	cd gradlog && go vet ./...
 	cd sdk/python && ruff check .
 
 # Format
 fmt:
-	cd backend && go fmt ./...
+	cd gradlog && go fmt ./...
 	cd sdk/python && black .
