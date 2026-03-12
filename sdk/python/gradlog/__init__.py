@@ -9,6 +9,7 @@ from gradlog.client import Client
 from gradlog.project import Project
 from gradlog.experiment import Experiment
 from gradlog.run import Run
+from gradlog.version import __version__
 from gradlog.exceptions import (
     GradlogError,
     AuthenticationError,
@@ -16,8 +17,6 @@ from gradlog.exceptions import (
     ValidationError,
     ServerError,
 )
-
-__version__ = "0.1.0"
 __all__ = [
     "Client",
     "Project",
