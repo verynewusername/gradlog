@@ -45,14 +45,14 @@ jobs:
             fi
           fi
 
-        - name: Read version
-          id: bump
+      - name: Read version
+        id: bump
         if: steps.check.outputs.changed == 'true'
         working-directory: sdk/python
         run: |
-            VERSION=$(python -c "from gradlog.version import __version__; print(__version__)")
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-            echo "Publishing version $VERSION"
+          VERSION=$(python -c "from gradlog.version import __version__; print(__version__)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $VERSION"
 
       - name: Install build tools
         if: steps.check.outputs.changed == 'true'
