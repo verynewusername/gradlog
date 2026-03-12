@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/gradlog/gradlog/internal/config"
 	"github.com/gradlog/gradlog/internal/database"
 	"github.com/gradlog/gradlog/internal/models"
 )
@@ -21,14 +22,36 @@ const (
 	contextKeyUserID = "gradlog_user_id"
 )
 
+// devNoAuthUserID is a fixed synthetic user injected in DEV_NOAUTH_EMAIL mode.
+// The UUID is deterministic so project memberships survive restarts.
+var devNoAuthUserID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+// DevNoAuthUserID returns the fixed UUID used for the synthetic dev user.
+func DevNoAuthUserID() uuid.UUID { return devNoAuthUserID }
+
 // Auth returns a Gin middleware that authenticates requests using an opaque token
 // looked up in the api_keys table. Tokens are accepted via:
 //   - Authorization: Bearer <token>
 //   - Authorization: ApiKey <token>
 //
+// When cfg.DevNoAuthEmail is non-empty every request is automatically
+// authenticated as a synthetic dev user — no token required.
 // Unauthenticated requests receive a 401 response.
-func Auth(db *database.DB) gin.HandlerFunc {
+func Auth(db *database.DB, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// ── DEV BYPASS ──────────────────────────────────────────────────
+		if cfg.DevNoAuthEmail != "" {
+			devUser := &models.User{
+				ID:    devNoAuthUserID,
+				Email: cfg.DevNoAuthEmail,
+				Name:  "Dev User",
+			}
+			c.Set(contextKeyUser, devUser)
+			c.Set(contextKeyUserID, devNoAuthUserID)
+			c.Next()
+			return
+		}
+		// ── NORMAL AUTH ─────────────────────────────────────────────────
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
