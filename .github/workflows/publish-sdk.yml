@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write  # required for trusted publishing
-      contents: write  # required to push the version bump commit
+      contents: write  # required to push the version tag
 
     steps:
       - name: Checkout repository
@@ -45,20 +45,14 @@ jobs:
             fi
           fi
 
-      - name: Compute new version
-        id: bump
+        - name: Read version
+          id: bump
         if: steps.check.outputs.changed == 'true'
         working-directory: sdk/python
         run: |
-          CURRENT=$(grep '^version' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-          MINOR=$(echo "$CURRENT" | cut -d. -f2)
-          PATCH=$(echo "$CURRENT" | cut -d. -f3)
-          NEW="$MAJOR.$MINOR.$((PATCH + 1))"
-          # Patch pyproject.toml in-place (no commit needed)
-          sed -i "s/^version = \"$CURRENT\"/version = \"$NEW\"/" pyproject.toml
-          echo "version=$NEW" >> "$GITHUB_OUTPUT"
-          echo "Bumped $CURRENT → $NEW"
+            VERSION=$(python -c "from gradlog.version import __version__; print(__version__)")
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Publishing version $VERSION"
 
       - name: Install build tools
         if: steps.check.outputs.changed == 'true'

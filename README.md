@@ -46,16 +46,16 @@ If you enable Google OAuth, set these values in `gradlog/.env`:
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URL`
 
-For domain `gradlog.efesirin.com` use:
+For your domain (e.g. `your-domain.com`) use:
 
-- Authorized JavaScript origins: `https://gradlog.efesirin.com`
-- Authorized redirect URI: `https://gradlog.efesirin.com/api/v1/auth/google/callback`
+- Authorized JavaScript origins: `https://your-domain.com`
+- Authorized redirect URI: `https://your-domain.com/api/v1/auth/google/callback`
 
 And set:
 
 ```env
-GOOGLE_REDIRECT_URL=https://gradlog.efesirin.com/api/v1/auth/google/callback
-FRONTEND_URL=https://gradlog.efesirin.com
+GOOGLE_REDIRECT_URL=https://your-domain.com/api/v1/auth/google/callback
+FRONTEND_URL=https://your-domain.com
 ```
 
 ## Notes
