@@ -1,5 +1,9 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+
+# Populated automatically by Buildx
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -15,7 +19,8 @@ COPY . .
 
 # Build the binary with embedded migrations.
 # CGO is disabled for a fully static binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /gradlog ./cmd/gradlog
+# GOOS/GOARCH are set from Buildx TARGETOS/TARGETARCH for native cross-compilation.
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-w -s" -o /gradlog ./cmd/gradlog
 
 # Runtime stage
 FROM alpine:3.19

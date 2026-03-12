@@ -44,3 +44,5 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+docker-compose.prod.yml
+scripts/create_gradlog_db_user.sh
