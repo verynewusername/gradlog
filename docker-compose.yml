@@ -1,0 +1,61 @@
+# Gradlog Docker Compose Configuration
+# This file sets up the complete Gradlog stack for local development.
+#
+# Usage:
+#   cp backend/.env.example backend/.env
+#   # Edit backend/.env with your configuration
+#   docker-compose up -d
+#
+# The backend will be available at http://localhost:8080
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:17
+    container_name: gradlog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gradlog
+      POSTGRES_PASSWORD: gradlog
+      POSTGRES_DB: gradlog
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gradlog -d gradlog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Gradlog backend API
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: gradlog-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount .env file for configuration
+      - ./backend/.env:/app/.env:ro
+      # Mount artifact storage directory
+      - artifact_data:/data/artifacts
+    environment:
+      # Override database URL to use docker network
+      DATABASE_URL: postgres://gradlog:gradlog@postgres:5432/gradlog?sslmode=disable
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  artifact_data:
+    driver: local
