@@ -144,6 +144,12 @@ func Setup(cfg *config.Config, db *database.DB, store *storage.LocalStorage) *gi
 	fileServer := http.FileServer(distFS)
 
 	r.NoRoute(func(c *gin.Context) {
+		// Avoid stale SPA assets after deploys. A mismatched cached app.js can
+		// crash startup if HTML and JS versions diverge.
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+
 		// Try serving the exact file first.
 		f, err := distFS.Open(c.Request.URL.Path)
 		if err != nil {
