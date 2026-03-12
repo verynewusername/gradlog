@@ -32,15 +32,15 @@ jobs:
           # Find the last SDK git tag as baseline
           LAST_TAG=$(git tag --list 'sdk-v*' --sort=-version:refname | head -1)
           if [ -z "$LAST_TAG" ]; then
-            echo "No previous sdk tag found — will publish."
+            echo "No previous sdk tag found - will publish."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             CHANGED=$(git diff "$LAST_TAG"..HEAD -- . | wc -l | tr -d ' ')
             if [ "$CHANGED" -gt 0 ]; then
-              echo "SDK changed since $LAST_TAG — will publish."
+              echo "SDK changed since $LAST_TAG - will publish."
               echo "changed=true" >> "$GITHUB_OUTPUT"
             else
-              echo "No SDK changes since $LAST_TAG — skipping."
+              echo "No SDK changes since $LAST_TAG - skipping."
               echo "changed=false" >> "$GITHUB_OUTPUT"
             fi
           fi

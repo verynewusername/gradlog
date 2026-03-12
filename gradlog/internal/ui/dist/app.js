@@ -986,21 +986,25 @@
   /*  Event bindings                                                     */
   /* ------------------------------------------------------------------ */
   function bindEvents() {
+    const onClick = (node, handler) => { if (node) node.onclick = handler; };
+    const onSubmit = (node, handler) => { if (node) node.onsubmit = handler; };
+    const onChange = (node, handler) => { if (node) node.onchange = handler; };
+
     // Theme
-    el.themeToggle.onclick = () => setTheme(state.theme === "dark" ? "light" : "dark");
+    onClick(el.themeToggle, () => setTheme(state.theme === "dark" ? "light" : "dark"));
 
     // OAuth
-    el.oauthBtn.onclick = () => { window.location.href = "/api/v1/auth/google/login"; };
+    onClick(el.oauthBtn, () => { window.location.href = "/api/v1/auth/google/login"; });
 
     // User menu
-    el.userMenuBtn.onclick = (e) => {
+    onClick(el.userMenuBtn, (e) => {
       e.stopPropagation();
       el.userDropdown.classList.toggle("hidden");
-    };
+    });
     document.addEventListener("click", () => el.userDropdown.classList.add("hidden"));
 
     // Logout
-    el.logoutBtn.onclick = () => {
+    onClick(el.logoutBtn, () => {
       state.token = "";
       state.me = null;
       localStorage.removeItem(TOKEN_KEY);
@@ -1008,7 +1012,7 @@
       setAuthUi(false);
       el.authHint.textContent = "Signed out.";
       window.history.replaceState({}, "", "/");
-    };
+    });
 
     // Sidebar tabs
     document.querySelectorAll(".sidebar-tab").forEach((tab) => {
@@ -1025,14 +1029,14 @@
     });
 
     // Confirm dialog
-    el.confirmCancel.onclick = () => closeConfirm(false);
-    el.confirmOk.onclick = () => closeConfirm(true);
-    el.confirmOverlay.onclick = (e) => { if (e.target === el.confirmOverlay) closeConfirm(false); };
+    onClick(el.confirmCancel, () => closeConfirm(false));
+    onClick(el.confirmOk, () => closeConfirm(true));
+    onClick(el.confirmOverlay, (e) => { if (e.target === el.confirmOverlay) closeConfirm(false); });
 
     // Project form
-    el.newProjectBtn.onclick = () => el.projectFormWrap.classList.toggle("hidden");
-    el.cancelProjectBtn.onclick = () => el.projectFormWrap.classList.add("hidden");
-    el.projectForm.onsubmit = async (ev) => {
+    onClick(el.newProjectBtn, () => el.projectFormWrap.classList.toggle("hidden"));
+    onClick(el.cancelProjectBtn, () => el.projectFormWrap.classList.add("hidden"));
+    onSubmit(el.projectForm, async (ev) => {
       ev.preventDefault();
       try {
         await api("/api/v1/projects", {
@@ -1044,12 +1048,12 @@
         await loadProjects();
         toast("Project created");
       } catch (e) { toast(e.message, true); }
-    };
+    });
 
     // Experiment form
-    el.newExperimentBtn.onclick = () => el.experimentFormWrap.classList.toggle("hidden");
-    el.cancelExperimentBtn.onclick = () => el.experimentFormWrap.classList.add("hidden");
-    el.experimentForm.onsubmit = async (ev) => {
+    onClick(el.newExperimentBtn, () => el.experimentFormWrap.classList.toggle("hidden"));
+    onClick(el.cancelExperimentBtn, () => el.experimentFormWrap.classList.add("hidden"));
+    onSubmit(el.experimentForm, async (ev) => {
       ev.preventDefault();
       if (!state.selectedProjectId) { toast("Select a project first", true); return; }
       try {
@@ -1062,10 +1066,10 @@
         await loadExperiments();
         toast("Experiment created");
       } catch (e) { toast(e.message, true); }
-    };
+    });
 
     // Run status update
-    el.runStatusForm.onsubmit = async (ev) => {
+    onSubmit(el.runStatusForm, async (ev) => {
       ev.preventDefault();
       if (!state.selectedRunId) return;
       try {
@@ -1077,10 +1081,10 @@
         await selectRun(state.selectedRunId);
         toast("Status updated");
       } catch (e) { toast(e.message, true); }
-    };
+    });
 
     // Refresh metrics
-    el.refreshMetricsBtn.onclick = async () => {
+    onClick(el.refreshMetricsBtn, async () => {
       if (!state.selectedRunId) return;
       try {
         state.metricsGrouped = await api(`/api/v1/runs/${state.selectedRunId}/metrics`);
@@ -1089,16 +1093,16 @@
         renderCharts();
         toast("Metrics refreshed");
       } catch (e) { toast(e.message, true); }
-    };
+    });
 
     // Artifact upload
-    el.artifactFileInput.onchange = () => {
+    onChange(el.artifactFileInput, () => {
       const file = el.artifactFileInput.files[0];
       if (file) uploadArtifact(file);
-    };
+    });
 
     // Members
-    el.memberForm.onsubmit = async (ev) => {
+    onSubmit(el.memberForm, async (ev) => {
       ev.preventDefault();
       if (!state.selectedProjectId) { toast("Select a project first", true); return; }
       try {
@@ -1110,10 +1114,10 @@
         await loadMembers();
         toast("Member added");
       } catch (e) { toast(e.message, true); }
-    };
+    });
 
     // API Keys
-    el.apiKeyForm.onsubmit = async (ev) => {
+    onSubmit(el.apiKeyForm, async (ev) => {
       ev.preventDefault();
       try {
         const payload = { name: el.apiKeyName.value.trim() };
@@ -1126,11 +1130,11 @@
         await loadApiKeys();
         toast("API key created");
       } catch (e) { toast(e.message, true); }
-    };
+    });
 
-    el.copyKeyBtn.onclick = () => {
+    onClick(el.copyKeyBtn, () => {
       navigator.clipboard.writeText(el.newKeyValue.textContent).then(() => toast("Copied!"));
-    };
+    });
   }
 
   /* ------------------------------------------------------------------ */
