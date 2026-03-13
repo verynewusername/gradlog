@@ -44,8 +44,8 @@ func Setup(cfg *config.Config, db *database.DB, store *storage.LocalStorage) *gi
 
 	// Initialise handlers.
 	projectHandler := handlers.NewProjectHandler(db, store)
-	experimentHandler := handlers.NewExperimentHandler(db, projectHandler)
-	runHandler := handlers.NewRunHandler(db, projectHandler)
+	experimentHandler := handlers.NewExperimentHandler(db, projectHandler, store)
+	runHandler := handlers.NewRunHandler(db, projectHandler, store)
 	metricHandler := handlers.NewMetricHandler(db, projectHandler)
 	artifactHandler := handlers.NewArtifactHandler(db, store, cfg, projectHandler)
 	authHandler := handlers.NewAuthHandler(cfg, db)

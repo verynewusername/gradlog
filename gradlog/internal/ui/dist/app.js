@@ -463,8 +463,59 @@
       btn.textContent = e.name;
       btn.onclick = () => selectExperiment(e.id);
       li.appendChild(btn);
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "item-action-btn";
+      delBtn.title = "Delete experiment";
+      delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>';
+      delBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        deleteExperiment(e);
+      };
+      li.appendChild(delBtn);
+
       el.experimentList.appendChild(li);
     });
+  }
+
+  async function deleteExperiment(exp) {
+    const phrase = "I am sure";
+    const typed = window.prompt(
+      `This will permanently delete experiment "${exp.name}" and all of its runs, metrics, and artifacts.\n\nType exactly \"${phrase}\" to continue.`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== phrase) {
+      toast(`Deletion cancelled. Type exactly \"${phrase}\".`, true);
+      return;
+    }
+
+    const ok = await confirm(
+      "Delete Experiment Forever",
+      `Final confirmation: delete \"${exp.name}\" and all its data permanently?`,
+      "Delete Forever"
+    );
+    if (!ok) return;
+
+    try {
+      await api(`/api/v1/experiments/${exp.id}`, { method: "DELETE" });
+
+      if (state.selectedExperimentId === exp.id) {
+        state.selectedExperimentId = "";
+        state.selectedRunId = "";
+        state.runs = [];
+        state.latestMetrics = [];
+        state.metricsGrouped = [];
+        state.artifacts = [];
+        destroyCharts();
+        clearRunView();
+      }
+
+      await loadExperiments();
+      toast("Experiment deleted permanently");
+    } catch (e) {
+      toast(e.message, true);
+    }
   }
 
   async function selectExperiment(id) {
@@ -512,8 +563,57 @@
       btn.innerHTML = `${esc(run.name || "Unnamed run")} <span class="status-pill status-${esc(run.status)}">${esc(run.status)}</span>`;
       btn.onclick = () => selectRun(run.id);
       li.appendChild(btn);
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "item-action-btn";
+      delBtn.title = "Delete run";
+      delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>';
+      delBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        deleteRun(run);
+      };
+      li.appendChild(delBtn);
+
       el.runList.appendChild(li);
     });
+  }
+
+  async function deleteRun(run) {
+    const phrase = "I am sure";
+    const typed = window.prompt(
+      `This will permanently delete run \"${run.name || run.id}\" and all related metrics and artifacts.\n\nType exactly \"${phrase}\" to continue.`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== phrase) {
+      toast(`Deletion cancelled. Type exactly \"${phrase}\".`, true);
+      return;
+    }
+
+    const ok = await confirm(
+      "Delete Run Forever",
+      `Final confirmation: permanently delete \"${run.name || run.id}\"?`,
+      "Delete Forever"
+    );
+    if (!ok) return;
+
+    try {
+      await api(`/api/v1/runs/${run.id}`, { method: "DELETE" });
+
+      if (state.selectedRunId === run.id) {
+        state.selectedRunId = "";
+        state.latestMetrics = [];
+        state.metricsGrouped = [];
+        state.artifacts = [];
+        destroyCharts();
+        clearRunView();
+      }
+
+      await loadRuns();
+      toast("Run deleted permanently");
+    } catch (e) {
+      toast(e.message, true);
+    }
   }
 
   function clearRunView() {
