@@ -1,13 +1,15 @@
 # gradlog
 
-Self-hosted ML experiment tracker.
+Gradlog is a self-hosted ML experiment tracker built for teams that want authentication and access control out of the box.
 
-Gradlog runs as a single service (Go + Gin + Postgres) and can serve the website directly from the same container. You do not need Cloudflare Pages when deploying this way.
+It was created from a simple idea: MLflow-style tracking is great, but many teams still need stronger built-in auth and multi-user access patterns for real deployments. Gradlog keeps the workflow simple while adding production-friendly auth and project access management.
+
+Gradlog runs as a single service (Go + Gin + Postgres) and serves the web UI directly from the same container.
 
 ## Architecture
 
 - API + Web server: Go/Gin
-- Database: PostgreSQL 17
+- Database: PostgreSQL 
 - Auth: opaque API/session tokens (no JWT)
 - UI hosting: static frontend files served by backend
 
@@ -62,3 +64,34 @@ FRONTEND_URL=https://your-domain.com
 
 - `JWT_SECRET` is not used.
 - If OAuth is not configured, token-based API key auth still works.
+
+## Dual Licensing
+
+Gradlog is dual-licensed.
+
+- Open source use: GNU GPL v3 (see [LICENSE](LICENSE)).
+- Commercial use: commercial license terms (see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL)).
+
+### GPL v3 path
+
+You can use Gradlog under GPL v3 for scenarios such as:
+
+- Personal and non-commercial usage
+- Academic and research usage
+- GPL v3-compatible open source projects
+
+### Commercial license path
+
+A commercial license is required for uses such as:
+
+- Closed-source or proprietary distribution
+- Hosted/managed SaaS offerings
+- Internal commercial platforms that do not comply with GPL v3 obligations
+
+### Commercial licensing contact
+
+For commercial licensing, contact: gradlog@efesirin.com
+
+## Contributing
+
+Pull requests are welcome.
