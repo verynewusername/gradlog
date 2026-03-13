@@ -755,7 +755,7 @@
       dlBtn.onclick = (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        downloadArtifact(a);
+        downloadArtifact(a, dlBtn);
       };
 
       const delBtn = document.createElement("button");
@@ -775,7 +775,13 @@
     });
   }
 
-  async function downloadArtifact(a) {
+  async function downloadArtifact(a, btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      btn.innerHTML = '<svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" opacity="0.25"></circle><path d="M21 12a9 9 0 00-9-9"></path></svg> Downloading...';
+    }
+
     try {
       toast(`Starting download: ${a.file_name || a.path || "artifact"}`);
       const dlHeaders = {};
@@ -814,6 +820,12 @@
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (e) {
       toast(e.message, true);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("is-loading");
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> Download';
+      }
     }
   }
 

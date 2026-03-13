@@ -573,14 +573,15 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 
 	var storagePath string
 	var runID uuid.UUID
+	var artifactPath string
 	var fileSize int64
 	var fileName string
 	var contentType string
 	if err := h.db.Pool.QueryRow(
 		c.Request.Context(),
-		`SELECT run_id, storage_path, file_size, file_name, content_type FROM artifacts WHERE id = $1`,
+		`SELECT run_id, path, storage_path, file_size, file_name, content_type FROM artifacts WHERE id = $1`,
 		artifactID,
-	).Scan(&runID, &storagePath, &fileSize, &fileName, &contentType); err != nil {
+	).Scan(&runID, &artifactPath, &storagePath, &fileSize, &fileName, &contentType); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "artifact not found"})
 		return
 	}
@@ -588,7 +589,7 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 	resolvedPath := h.resolveArtifactStoragePath(&models.Artifact{
 		ID:          artifactID,
 		RunID:       runID,
-		Path:        fileName,
+		Path:        artifactPath,
 		FileName:    fileName,
 		StoragePath: storagePath,
 	})
@@ -769,8 +770,13 @@ func (h *ArtifactHandler) resolveArtifactStoragePath(a *models.Artifact) string 
 	candidates := []string{
 		a.StoragePath,
 		fmt.Sprintf("runs/%s/artifacts/%s/%s", a.RunID, a.ID, a.FileName),
+		fmt.Sprintf("runs/%s/artifacts/%s/%s", a.RunID, a.ID, a.Path),
 		fmt.Sprintf("runs/%s/artifacts/%s", a.RunID, a.FileName),
+		fmt.Sprintf("runs/%s/artifacts/%s", a.RunID, a.Path),
+		fmt.Sprintf("artifacts/%s/%s", a.RunID, a.FileName),
+		fmt.Sprintf("artifacts/%s/%s", a.RunID, a.Path),
 		fmt.Sprintf("runs/%s/%s", a.RunID, a.FileName),
+		fmt.Sprintf("runs/%s/%s", a.RunID, a.Path),
 		a.Path,
 	}
 
