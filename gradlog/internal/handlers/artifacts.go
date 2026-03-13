@@ -657,6 +657,9 @@ func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 		if isStorageNotFoundError(err) {
 			if streamErr := h.streamArtifactFromChunks(c, artifact); streamErr == nil {
 				return
+			} else if isStorageNotFoundError(streamErr) || strings.Contains(strings.ToLower(streamErr.Error()), "no chunk data available") {
+				c.JSON(http.StatusNotFound, gin.H{"error": "artifact data missing from storage (file/chunks not found)"})
+				return
 			}
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read artifact"})
@@ -704,6 +707,13 @@ func (h *ArtifactHandler) streamArtifactFromChunks(c *gin.Context, artifact *mod
 	}
 	if len(chunkPaths) == 0 {
 		return fmt.Errorf("no chunk data available")
+	}
+
+	// Verify all chunk files exist before sending headers/body.
+	for _, p := range chunkPaths {
+		if !h.storage.Exists(p) {
+			return fmt.Errorf("file not found: %s", p)
+		}
 	}
 
 	contentType := "application/octet-stream"

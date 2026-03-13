@@ -775,34 +775,6 @@
     });
   }
 
-  async function downloadArtifactViaChunks(a, filename) {
-    const info = await api(`/api/v1/artifacts/${a.id}/download-info`);
-    if (!info.total_chunks || info.total_chunks < 1) {
-      throw new Error("Artifact has no downloadable chunks");
-    }
-
-    const parts = [];
-    for (let i = 0; i < info.total_chunks; i++) {
-      const chunkRes = await fetch(`/api/v1/artifacts/${a.id}/chunks/${i}`, {
-        headers: state.token && !state.noauth ? { Authorization: `Bearer ${state.token}` } : {},
-        cache: "no-store",
-      });
-      if (!chunkRes.ok) throw new Error("Failed while downloading artifact chunks");
-      parts.push(await chunkRes.arrayBuffer());
-    }
-
-    const blob = new Blob(parts, { type: a.content_type || "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
-
   async function downloadArtifact(a) {
     try {
       toast(`Starting download: ${a.file_name || a.path || "artifact"}`);
@@ -816,19 +788,6 @@
           if (err && err.error) msg = err.error;
         } catch {
           // ignore parse failures and keep generic message
-        }
-
-        // If the assembled file is missing but chunk records exist, fall back to
-        // chunked download so users can still retrieve the artifact.
-        if (msg.includes("failed to read artifact")) {
-          let fallbackName = a.file_name || "artifact";
-          try {
-            await downloadArtifactViaChunks(a, fallbackName);
-            toast("Download started via chunk fallback");
-            return;
-          } catch {
-            // fall through and show original error
-          }
         }
 
         throw new Error(msg);
