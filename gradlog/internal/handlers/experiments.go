@@ -9,17 +9,19 @@ import (
 	"github.com/gradlog/gradlog/internal/database"
 	"github.com/gradlog/gradlog/internal/middleware"
 	"github.com/gradlog/gradlog/internal/models"
+	"github.com/gradlog/gradlog/internal/storage"
 )
 
 // ExperimentHandler handles CRUD operations for experiments within projects.
 type ExperimentHandler struct {
 	db             *database.DB
 	projectHandler *ProjectHandler
+	storage        *storage.LocalStorage
 }
 
 // NewExperimentHandler creates a new ExperimentHandler.
-func NewExperimentHandler(db *database.DB, ph *ProjectHandler) *ExperimentHandler {
-	return &ExperimentHandler{db: db, projectHandler: ph}
+func NewExperimentHandler(db *database.DB, ph *ProjectHandler, store *storage.LocalStorage) *ExperimentHandler {
+	return &ExperimentHandler{db: db, projectHandler: ph, storage: store}
 }
 
 // CreateExperiment handles POST /projects/:id/experiments.
@@ -243,12 +245,48 @@ func (h *ExperimentHandler) DeleteExperiment(c *gin.Context) {
 		return
 	}
 
+	paths := make([]string, 0)
+	rows, err := h.db.Pool.Query(
+		c.Request.Context(),
+		`SELECT a.storage_path
+		 FROM artifacts a
+		 JOIN runs r ON r.id = a.run_id
+		 WHERE r.experiment_id = $1
+		 UNION
+		 SELECT ac.storage_path
+		 FROM artifact_chunks ac
+		 JOIN artifacts a ON a.id = ac.artifact_id
+		 JOIN runs r ON r.id = a.run_id
+		 WHERE r.experiment_id = $1`,
+		id,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare experiment deletion"})
+		return
+	}
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare experiment deletion"})
+			return
+		}
+		paths = append(paths, p)
+	}
+	rows.Close()
+
 	if _, err := h.db.Pool.Exec(
 		c.Request.Context(),
 		`DELETE FROM experiments WHERE id = $1`, id,
 	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete experiment"})
 		return
+	}
+
+	if h.storage != nil {
+		for _, p := range paths {
+			h.storage.Delete(p)
+		}
 	}
 
 	c.JSON(http.StatusNoContent, nil)

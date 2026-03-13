@@ -10,19 +10,22 @@ import (
 	"github.com/gradlog/gradlog/internal/database"
 	"github.com/gradlog/gradlog/internal/middleware"
 	"github.com/gradlog/gradlog/internal/models"
+	"github.com/gradlog/gradlog/internal/storage"
 )
 
 // RunHandler handles run-related requests.
 type RunHandler struct {
 	db             *database.DB
 	projectHandler *ProjectHandler
+	storage        *storage.LocalStorage
 }
 
 // NewRunHandler creates a new run handler.
-func NewRunHandler(db *database.DB, projectHandler *ProjectHandler) *RunHandler {
+func NewRunHandler(db *database.DB, projectHandler *ProjectHandler, store *storage.LocalStorage) *RunHandler {
 	return &RunHandler{
 		db:             db,
 		projectHandler: projectHandler,
+		storage:        store,
 	}
 }
 
@@ -397,6 +400,32 @@ func (h *RunHandler) DeleteRun(c *gin.Context) {
 		return
 	}
 
+	paths := make([]string, 0)
+	rows, err := h.db.Pool.Query(
+		c.Request.Context(),
+		`SELECT storage_path FROM artifacts WHERE run_id = $1
+		 UNION
+		 SELECT ac.storage_path
+		 FROM artifact_chunks ac
+		 JOIN artifacts a ON a.id = ac.artifact_id
+		 WHERE a.run_id = $1`,
+		runID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare run deletion"})
+		return
+	}
+	for rows.Next() {
+		var p string
+		if scanErr := rows.Scan(&p); scanErr != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare run deletion"})
+			return
+		}
+		paths = append(paths, p)
+	}
+	rows.Close()
+
 	_, err = h.db.Pool.Exec(c.Request.Context(), `
 		DELETE FROM runs WHERE id = $1
 	`, runID)
@@ -405,6 +434,12 @@ func (h *RunHandler) DeleteRun(c *gin.Context) {
 			"error": "Failed to delete run",
 		})
 		return
+	}
+
+	if h.storage != nil {
+		for _, p := range paths {
+			h.storage.Delete(p)
+		}
 	}
 
 	c.Status(http.StatusNoContent)
