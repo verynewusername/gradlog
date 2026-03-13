@@ -703,14 +703,36 @@
       const dlHeaders = {};
       if (state.token && !state.noauth) dlHeaders.Authorization = `Bearer ${state.token}`;
       const res = await fetch(`/api/v1/artifacts/${a.id}/download`, { headers: dlHeaders });
-      if (!res.ok) throw new Error("Download failed");
+      if (!res.ok) {
+        let msg = "Download failed";
+        try {
+          const err = await res.json();
+          if (err && err.error) msg = err.error;
+        } catch {
+          // ignore parse failures and keep generic message
+        }
+        throw new Error(msg);
+      }
+
+      // Prefer server-provided filename when available.
+      let filename = a.file_name || "artifact";
+      const cd = res.headers.get("content-disposition") || "";
+      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      if (m) {
+        filename = decodeURIComponent((m[1] || m[2] || "").trim()) || filename;
+      }
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = a.file_name || "artifact";
+      anchor.download = filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
       anchor.click();
-      URL.revokeObjectURL(url);
+      anchor.remove();
+      // Revoke asynchronously so Safari has time to start the download.
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (e) {
       toast(e.message, true);
     }
