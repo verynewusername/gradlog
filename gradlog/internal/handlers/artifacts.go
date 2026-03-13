@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 	"github.com/gradlog/gradlog/internal/middleware"
 	"github.com/gradlog/gradlog/internal/models"
 	"github.com/gradlog/gradlog/internal/storage"
+	"github.com/jackc/pgx/v5"
 )
 
 // ArtifactHandler handles upload, download, and management of run artifacts.
@@ -537,6 +539,38 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 		return
 	}
 
+	// Prefer explicit stored chunks when present. This supports partial/fallback
+	// downloads even when the assembled full artifact file is missing.
+	var explicitChunkPath string
+	err = h.db.Pool.QueryRow(
+		c.Request.Context(),
+		`SELECT storage_path FROM artifact_chunks WHERE artifact_id = $1 AND chunk_number = $2`,
+		artifactID, chunkNumber,
+	).Scan(&explicitChunkPath)
+	if err == nil {
+		chunkReader, readErr := h.storage.Retrieve(explicitChunkPath)
+		if readErr != nil {
+			if isStorageNotFoundError(readErr) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "artifact chunk not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read artifact"})
+			return
+		}
+		defer chunkReader.Close()
+
+		chunkSize, _ := h.storage.Size(explicitChunkPath)
+		c.Header("Content-Length", strconv.FormatInt(chunkSize, 10))
+		c.Header("Content-Type", "application/octet-stream")
+		c.Status(http.StatusOK)
+		io.Copy(c.Writer, chunkReader)
+		return
+	}
+	if err != pgx.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch artifact chunk"})
+		return
+	}
+
 	var storagePath string
 	var fileSize int64
 	var fileName string
@@ -564,6 +598,10 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 
 	reader, err := h.storage.RetrieveRange(storagePath, start, length)
 	if err != nil {
+		if isStorageNotFoundError(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "artifact file not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read artifact"})
 		return
 	}
@@ -616,6 +654,11 @@ func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 
 	reader, err := h.storage.Retrieve(artifact.StoragePath)
 	if err != nil {
+		if isStorageNotFoundError(err) {
+			if streamErr := h.streamArtifactFromChunks(c, artifact); streamErr == nil {
+				return
+			}
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read artifact"})
 		return
 	}
@@ -631,6 +674,63 @@ func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 	c.Header("Content-Type", contentType)
 	c.Status(http.StatusOK)
 	io.Copy(c.Writer, reader)
+}
+
+func isStorageNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "file not found")
+}
+
+func (h *ArtifactHandler) streamArtifactFromChunks(c *gin.Context, artifact *models.Artifact) error {
+	rows, err := h.db.Pool.Query(
+		c.Request.Context(),
+		`SELECT storage_path FROM artifact_chunks WHERE artifact_id = $1 ORDER BY chunk_number ASC`,
+		artifact.ID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	chunkPaths := make([]string, 0)
+	for rows.Next() {
+		var p string
+		if scanErr := rows.Scan(&p); scanErr != nil {
+			return scanErr
+		}
+		chunkPaths = append(chunkPaths, p)
+	}
+	if len(chunkPaths) == 0 {
+		return fmt.Errorf("no chunk data available")
+	}
+
+	contentType := "application/octet-stream"
+	if artifact.ContentType != nil && *artifact.ContentType != "" {
+		contentType = *artifact.ContentType
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, artifact.FileName))
+	c.Header("Content-Type", contentType)
+	if artifact.FileSize > 0 {
+		c.Header("Content-Length", strconv.FormatInt(artifact.FileSize, 10))
+	}
+	c.Status(http.StatusOK)
+
+	for _, p := range chunkPaths {
+		r, readErr := h.storage.Retrieve(p)
+		if readErr != nil {
+			return readErr
+		}
+		if _, copyErr := io.Copy(c.Writer, r); copyErr != nil {
+			r.Close()
+			return copyErr
+		}
+		r.Close()
+	}
+
+	return nil
 }
 
 // DeleteArtifact handles DELETE /artifacts/:artifactId.
