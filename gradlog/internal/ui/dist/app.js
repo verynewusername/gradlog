@@ -335,13 +335,72 @@
     state.projects.forEach((p) => {
       const li = document.createElement("li");
       li.className = `item-row ${p.id === state.selectedProjectId ? "active" : ""}`;
+
       const btn = document.createElement("button");
       btn.className = "item-label";
       btn.textContent = p.name;
       btn.onclick = () => selectProject(p.id);
       li.appendChild(btn);
+
+      if (state.me && p.owner_id === state.me.id) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "item-action-btn";
+        delBtn.title = "Delete project";
+        delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>';
+        delBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          deleteProject(p);
+        };
+        li.appendChild(delBtn);
+      }
+
       el.projectList.appendChild(li);
     });
+  }
+
+  async function deleteProject(project) {
+    const phrase = "I am sure";
+    const typed = window.prompt(
+      `This will permanently delete project "${project.name}" and all experiments, runs, metrics, and artifacts.\n\nType exactly \"${phrase}\" to continue.`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== phrase) {
+      toast(`Deletion cancelled. Type exactly \"${phrase}\".`, true);
+      return;
+    }
+
+    const ok = await confirm(
+      "Delete Project Forever",
+      `Final confirmation: delete \"${project.name}\" and all related data permanently?`,
+      "Delete Forever"
+    );
+    if (!ok) return;
+
+    try {
+      await api(`/api/v1/projects/${project.id}`, { method: "DELETE" });
+
+      if (state.selectedProjectId === project.id) {
+        state.selectedProjectId = "";
+        state.selectedExperimentId = "";
+        state.selectedRunId = "";
+        state.experiments = [];
+        state.runs = [];
+        state.latestMetrics = [];
+        state.metricsGrouped = [];
+        state.artifacts = [];
+        destroyCharts();
+        clearRunView();
+      }
+
+      await loadProjects();
+      if (!state.selectedProjectId && state.projects.length) {
+        await selectProject(state.projects[0].id);
+      }
+      toast("Project deleted permanently");
+    } catch (e) {
+      toast(e.message, true);
+    }
   }
 
   async function selectProject(id) {
@@ -677,9 +736,14 @@
       actions.className = "artifact-actions";
 
       const dlBtn = document.createElement("button");
+      dlBtn.type = "button";
       dlBtn.className = "btn btn-ghost btn-sm";
       dlBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> Download';
-      dlBtn.onclick = () => downloadArtifact(a);
+      dlBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        downloadArtifact(a);
+      };
 
       const delBtn = document.createElement("button");
       delBtn.className = "btn btn-ghost btn-sm";
@@ -700,9 +764,10 @@
 
   async function downloadArtifact(a) {
     try {
+      toast(`Starting download: ${a.file_name || a.path || "artifact"}`);
       const dlHeaders = {};
       if (state.token && !state.noauth) dlHeaders.Authorization = `Bearer ${state.token}`;
-      const res = await fetch(`/api/v1/artifacts/${a.id}/download`, { headers: dlHeaders });
+      const res = await fetch(`/api/v1/artifacts/${a.id}/download`, { headers: dlHeaders, cache: "no-store" });
       if (!res.ok) {
         let msg = "Download failed";
         try {

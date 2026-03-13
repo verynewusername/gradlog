@@ -9,17 +9,19 @@ import (
 	"github.com/gradlog/gradlog/internal/database"
 	"github.com/gradlog/gradlog/internal/middleware"
 	"github.com/gradlog/gradlog/internal/models"
+	"github.com/gradlog/gradlog/internal/storage"
 	"github.com/jackc/pgx/v5"
 )
 
 // ProjectHandler handles CRUD operations and membership management for projects.
 type ProjectHandler struct {
-	db *database.DB
+	db      *database.DB
+	storage *storage.LocalStorage
 }
 
 // NewProjectHandler creates a new ProjectHandler.
-func NewProjectHandler(db *database.DB) *ProjectHandler {
-	return &ProjectHandler{db: db}
+func NewProjectHandler(db *database.DB, store *storage.LocalStorage) *ProjectHandler {
+	return &ProjectHandler{db: db, storage: store}
 }
 
 // userHasAccess returns true if the given user is a member of the project.
@@ -274,12 +276,52 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 		return
 	}
 
+	// Capture storage paths before DB cascade deletion so underlying files can be
+	// removed from disk after the project is deleted.
+	paths := make([]string, 0)
+	rows, err := h.db.Pool.Query(
+		c.Request.Context(),
+		`SELECT a.storage_path
+		 FROM artifacts a
+		 JOIN runs r ON r.id = a.run_id
+		 JOIN experiments e ON e.id = r.experiment_id
+		 WHERE e.project_id = $1
+		 UNION
+		 SELECT ac.storage_path
+		 FROM artifact_chunks ac
+		 JOIN artifacts a ON a.id = ac.artifact_id
+		 JOIN runs r ON r.id = a.run_id
+		 JOIN experiments e ON e.id = r.experiment_id
+		 WHERE e.project_id = $1`,
+		id,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare project deletion"})
+		return
+	}
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare project deletion"})
+			return
+		}
+		paths = append(paths, path)
+	}
+	rows.Close()
+
 	if _, err := h.db.Pool.Exec(
 		c.Request.Context(),
 		`DELETE FROM projects WHERE id = $1`, id,
 	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete project"})
 		return
+	}
+
+	if h.storage != nil {
+		for _, p := range paths {
+			h.storage.Delete(p)
+		}
 	}
 
 	c.JSON(http.StatusNoContent, nil)

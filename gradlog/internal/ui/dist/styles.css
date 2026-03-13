@@ -439,6 +439,24 @@ select { cursor: pointer; }
   text-align: left;
 }
 .item-label:hover { color: var(--text); }
+.item-action-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.item-action-btn:hover {
+  color: var(--red);
+  border-color: var(--red-bg);
+  background: color-mix(in oklab, var(--red-bg) 40%, transparent);
+}
 .hint { color: var(--text-3); font-size: 11px; padding: 6px 8px; font-style: italic; }
 
 /* --- Content ------------------------------------------------------- */
