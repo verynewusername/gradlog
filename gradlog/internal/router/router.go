@@ -43,7 +43,7 @@ func Setup(cfg *config.Config, db *database.DB, store *storage.LocalStorage) *gi
 	})
 
 	// Initialise handlers.
-	projectHandler := handlers.NewProjectHandler(db)
+	projectHandler := handlers.NewProjectHandler(db, store)
 	experimentHandler := handlers.NewExperimentHandler(db, projectHandler)
 	runHandler := handlers.NewRunHandler(db, projectHandler)
 	metricHandler := handlers.NewMetricHandler(db, projectHandler)
