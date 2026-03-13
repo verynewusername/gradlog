@@ -6,6 +6,10 @@ It was created from a simple idea: MLflow-style tracking is great, but many team
 
 Gradlog runs as a single service (Go + Gin + Postgres) and serves the web UI directly from the same container.
 
+## UI Preview
+
+![Gradlog UI](demo.png)
+
 ## Architecture
 
 - API + Web server: Go/Gin
