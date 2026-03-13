@@ -572,16 +572,28 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 	}
 
 	var storagePath string
+	var runID uuid.UUID
 	var fileSize int64
 	var fileName string
 	var contentType string
 	if err := h.db.Pool.QueryRow(
 		c.Request.Context(),
-		`SELECT storage_path, file_size, file_name, content_type FROM artifacts WHERE id = $1`,
+		`SELECT run_id, storage_path, file_size, file_name, content_type FROM artifacts WHERE id = $1`,
 		artifactID,
-	).Scan(&storagePath, &fileSize, &fileName, &contentType); err != nil {
+	).Scan(&runID, &storagePath, &fileSize, &fileName, &contentType); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "artifact not found"})
 		return
+	}
+
+	resolvedPath := h.resolveArtifactStoragePath(&models.Artifact{
+		ID:          artifactID,
+		RunID:       runID,
+		Path:        fileName,
+		FileName:    fileName,
+		StoragePath: storagePath,
+	})
+	if resolvedPath != "" {
+		storagePath = resolvedPath
 	}
 
 	chunkSize := h.cfg.ArtifactChunkSize
@@ -653,6 +665,12 @@ func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 	}
 
 	reader, err := h.storage.Retrieve(artifact.StoragePath)
+	if err != nil {
+		if recovered := h.resolveArtifactStoragePath(artifact); recovered != "" && recovered != artifact.StoragePath {
+			artifact.StoragePath = recovered
+			reader, err = h.storage.Retrieve(artifact.StoragePath)
+		}
+	}
 	if err != nil {
 		if isStorageNotFoundError(err) {
 			if streamErr := h.streamArtifactFromChunks(c, artifact); streamErr == nil {
@@ -741,6 +759,37 @@ func (h *ArtifactHandler) streamArtifactFromChunks(c *gin.Context, artifact *mod
 	}
 
 	return nil
+}
+
+func (h *ArtifactHandler) resolveArtifactStoragePath(a *models.Artifact) string {
+	if a == nil {
+		return ""
+	}
+
+	candidates := []string{
+		a.StoragePath,
+		fmt.Sprintf("runs/%s/artifacts/%s/%s", a.RunID, a.ID, a.FileName),
+		fmt.Sprintf("runs/%s/artifacts/%s", a.RunID, a.FileName),
+		fmt.Sprintf("runs/%s/%s", a.RunID, a.FileName),
+		a.Path,
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, p := range candidates {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		if h.storage.Exists(p) {
+			return p
+		}
+	}
+
+	return ""
 }
 
 // DeleteArtifact handles DELETE /artifacts/:artifactId.
