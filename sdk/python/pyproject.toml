@@ -42,10 +42,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/gradlog/gradlog"
-Documentation = "https://github.com/gradlog/gradlog#readme"
-Repository = "https://github.com/gradlog/gradlog"
-Issues = "https://github.com/gradlog/gradlog/issues"
+Homepage = "https://github.com/verynewusername/gradlog"
+Documentation = "https://github.com/verynewusername/gradlog#readme"
+Repository = "https://github.com/verynewusername/gradlog"
+Issues = "https://github.com/verynewusername/gradlog/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
