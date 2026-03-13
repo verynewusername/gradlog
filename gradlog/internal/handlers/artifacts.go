@@ -560,10 +560,11 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 		defer chunkReader.Close()
 
 		chunkSize, _ := h.storage.Size(explicitChunkPath)
+		c.Header("Accept-Ranges", "bytes")
 		c.Header("Content-Length", strconv.FormatInt(chunkSize, 10))
 		c.Header("Content-Type", "application/octet-stream")
 		c.Status(http.StatusOK)
-		io.Copy(c.Writer, chunkReader)
+		streamWithFlush(c, chunkReader)
 		return
 	}
 	if err != pgx.ErrNoRows {
@@ -622,12 +623,14 @@ func (h *ArtifactHandler) DownloadChunk(c *gin.Context) {
 
 	c.Header("Content-Length", strconv.FormatInt(length, 10))
 	c.Header("Content-Type", contentType)
+	c.Header("Accept-Ranges", "bytes")
 	c.Status(http.StatusOK)
-	io.Copy(c.Writer, reader)
+	streamWithFlush(c, reader)
 }
 
 // SimpleDownload handles GET /artifacts/:artifactId/download.
 // Streams the full artifact file to the client with Content-Disposition header.
+// Supports HTTP Range requests for resumable and parallel downloads.
 func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 	userID := middleware.GetUserIDFromContext(c)
 	if userID == uuid.Nil {
@@ -665,13 +668,54 @@ func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 		return
 	}
 
-	reader, err := h.storage.Retrieve(artifact.StoragePath)
-	if err != nil {
-		if recovered := h.resolveArtifactStoragePath(artifact); recovered != "" && recovered != artifact.StoragePath {
-			artifact.StoragePath = recovered
-			reader, err = h.storage.Retrieve(artifact.StoragePath)
-		}
+	resolvedPath := h.resolveArtifactStoragePath(artifact)
+	if resolvedPath != "" {
+		artifact.StoragePath = resolvedPath
 	}
+
+	contentType := "application/octet-stream"
+	if artifact.ContentType != nil && *artifact.ContentType != "" {
+		contentType = *artifact.ContentType
+	}
+
+	rangeHeader := strings.TrimSpace(c.GetHeader("Range"))
+	if rangeHeader != "" {
+		if artifact.FileSize <= 0 {
+			c.Header("Content-Range", "bytes */0")
+			c.Status(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+
+		start, end, ok := parseRangeHeader(rangeHeader, artifact.FileSize)
+		if !ok {
+			c.Header("Content-Range", fmt.Sprintf("bytes */%d", artifact.FileSize))
+			c.Status(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+
+		length := end - start + 1
+		rangeReader, rangeErr := h.storage.RetrieveRange(artifact.StoragePath, start, length)
+		if rangeErr != nil {
+			if isStorageNotFoundError(rangeErr) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "artifact file not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read artifact"})
+			return
+		}
+		defer rangeReader.Close()
+
+		c.Header("Accept-Ranges", "bytes")
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, artifact.FileName))
+		c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, artifact.FileSize))
+		c.Header("Content-Length", strconv.FormatInt(length, 10))
+		c.Header("Content-Type", contentType)
+		c.Status(http.StatusPartialContent)
+		streamWithFlush(c, rangeReader)
+		return
+	}
+
+	reader, err := h.storage.Retrieve(artifact.StoragePath)
 	if err != nil {
 		if isStorageNotFoundError(err) {
 			if streamErr := h.streamArtifactFromChunks(c, artifact); streamErr == nil {
@@ -686,16 +730,12 @@ func (h *ArtifactHandler) SimpleDownload(c *gin.Context) {
 	}
 	defer reader.Close()
 
-	contentType := "application/octet-stream"
-	if artifact.ContentType != nil && *artifact.ContentType != "" {
-		contentType = *artifact.ContentType
-	}
-
+	c.Header("Accept-Ranges", "bytes")
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, artifact.FileName))
 	c.Header("Content-Length", strconv.FormatInt(artifact.FileSize, 10))
 	c.Header("Content-Type", contentType)
 	c.Status(http.StatusOK)
-	io.Copy(c.Writer, reader)
+	streamWithFlush(c, reader)
 }
 
 func isStorageNotFoundError(err error) bool {
@@ -742,6 +782,7 @@ func (h *ArtifactHandler) streamArtifactFromChunks(c *gin.Context, artifact *mod
 
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, artifact.FileName))
 	c.Header("Content-Type", contentType)
+	c.Header("Accept-Ranges", "bytes")
 	if artifact.FileSize > 0 {
 		c.Header("Content-Length", strconv.FormatInt(artifact.FileSize, 10))
 	}
@@ -752,7 +793,7 @@ func (h *ArtifactHandler) streamArtifactFromChunks(c *gin.Context, artifact *mod
 		if readErr != nil {
 			return readErr
 		}
-		if _, copyErr := io.Copy(c.Writer, r); copyErr != nil {
+		if copyErr := streamWithFlush(c, r); copyErr != nil {
 			r.Close()
 			return copyErr
 		}
@@ -796,6 +837,84 @@ func (h *ArtifactHandler) resolveArtifactStoragePath(a *models.Artifact) string 
 	}
 
 	return ""
+}
+
+func parseRangeHeader(rangeHeader string, fileSize int64) (start, end int64, ok bool) {
+	if fileSize <= 0 {
+		return 0, 0, false
+	}
+
+	rangeHeader = strings.TrimSpace(rangeHeader)
+	if !strings.HasPrefix(strings.ToLower(rangeHeader), "bytes=") {
+		return 0, 0, false
+	}
+
+	value := strings.TrimSpace(rangeHeader[len("bytes="):])
+	if value == "" || strings.Contains(value, ",") {
+		return 0, 0, false
+	}
+
+	parts := strings.SplitN(value, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+
+	startPart := strings.TrimSpace(parts[0])
+	endPart := strings.TrimSpace(parts[1])
+
+	if startPart == "" {
+		suffixLen, err := strconv.ParseInt(endPart, 10, 64)
+		if err != nil || suffixLen <= 0 {
+			return 0, 0, false
+		}
+		if suffixLen >= fileSize {
+			return 0, fileSize - 1, true
+		}
+		return fileSize - suffixLen, fileSize - 1, true
+	}
+
+	parsedStart, err := strconv.ParseInt(startPart, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	parsedEnd := fileSize - 1
+	if endPart != "" {
+		parsedEnd, err = strconv.ParseInt(endPart, 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+	}
+
+	if parsedStart < 0 || parsedStart >= fileSize || parsedEnd < parsedStart || parsedEnd >= fileSize {
+		return 0, 0, false
+	}
+
+	return parsedStart, parsedEnd, true
+}
+
+func streamWithFlush(c *gin.Context, reader io.Reader) error {
+	buf := make([]byte, 32*1024)
+	flusher, canFlush := c.Writer.(http.Flusher)
+
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			if _, writeErr := c.Writer.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			if canFlush {
+				flusher.Flush()
+			}
+		}
+
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
 
 // DeleteArtifact handles DELETE /artifacts/:artifactId.

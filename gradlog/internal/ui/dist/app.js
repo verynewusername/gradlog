@@ -907,17 +907,25 @@
         filename = decodeURIComponent((m[1] || m[2] || "").trim()) || filename;
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.style.display = "none";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      // Revoke asynchronously so Safari has time to start the download.
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      // Stream straight to disk when the browser supports File System Access API.
+      if (typeof window.showSaveFilePicker === "function" && res.body && typeof res.body.pipeTo === "function") {
+        const handle = await window.showSaveFilePicker({ suggestedName: filename });
+        const writable = await handle.createWritable();
+        await res.body.pipeTo(writable);
+      } else {
+        // Fallback path for browsers without direct disk streaming support.
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        // Revoke asynchronously so Safari has time to start the download.
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      }
     } catch (e) {
       toast(e.message, true);
     } finally {
