@@ -39,6 +39,9 @@
   --chart-line-4: #dc2626;
   --chart-line-5: #2563eb;
   --chart-line-6: #7c3aed;
+  --toast-bg: #111827;
+  --toast-fg: #ffffff;
+  --toast-error-bg: #dc2626;
 }
 
 [data-theme="dark"] {
@@ -73,6 +76,9 @@
   --chart-line-4: #f87171;
   --chart-line-5: #60a5fa;
   --chart-line-6: #a78bfa;
+  --toast-bg: #0b0b10;
+  --toast-fg: #f5f5ff;
+  --toast-error-bg: #ef4444;
 }
 
 /* --- Reset --------------------------------------------------------- */
@@ -860,12 +866,15 @@ select { cursor: pointer; }
   border-radius: var(--r);
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
-  background: var(--text);
+  color: var(--toast-fg);
+  background: var(--toast-bg);
   box-shadow: var(--shadow-lg);
   animation: slideUp 180ms ease;
 }
-.toast.toast-error { background: var(--red); }
+.toast.toast-error {
+  color: #fff;
+  background: var(--toast-error-bg);
+}
 
 /* --- Empty state --------------------------------------------------- */
 .empty-state {
