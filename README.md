@@ -1,4 +1,4 @@
-# gradlog
+# GRADLOG
 
 Gradlog is a self-hosted ML experiment tracker built for teams that want authentication and access control out of the box.
 
@@ -12,6 +12,17 @@ Gradlog runs as a single service (Go + Gin + Postgres) and serves the web UI dir
 - Database: PostgreSQL 
 - Auth: opaque API/session tokens (no JWT)
 - UI hosting: static frontend files served by backend
+
+## Gradlog vs MLflow
+
+Gradlog is intentionally built as a lightweight, self-hosted alternative for teams that want a simpler operational footprint.
+
+- Language/runtime: Gradlog is written in Go and runs as a single compiled service.
+- Deployment model: one service + Postgres, with API and UI served together.
+- Auth focus: built-in user auth, project membership, and API key flows for multi-user teams.
+- Operational overhead: no large Python web stack for the tracking server itself.
+
+MLflow remains a strong choice for broad ecosystem integrations and established workflows. Gradlog focuses on teams that prefer a smaller, auth-first tracker with straightforward self-hosting.
 
 ## Run With Docker Compose
 
