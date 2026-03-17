@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -894,8 +895,16 @@ func parseRangeHeader(rangeHeader string, fileSize int64) (start, end int64, ok 
 }
 
 func streamWithFlush(c *gin.Context, reader io.Reader) error {
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 512*1024) // 512 KB read buffer
 	flusher, canFlush := c.Writer.(http.Flusher)
+
+	written := int64(0)
+	const flushEvery = 2 * 1024 * 1024 // 2 MB
+
+	// Throttle to ~12 MB/s to prevent cloudflared buffer overflow
+	// when serving through Cloudflare Tunnel on limited upload bandwidth.
+	ticker := time.NewTicker(42 * time.Millisecond) // ~24 ticks/sec × 512KB = ~12 MB/s
+	defer ticker.Stop()
 
 	for {
 		n, err := reader.Read(buf)
@@ -903,12 +912,20 @@ func streamWithFlush(c *gin.Context, reader io.Reader) error {
 			if _, writeErr := c.Writer.Write(buf[:n]); writeErr != nil {
 				return writeErr
 			}
-			if canFlush {
+			written += int64(n)
+
+			if canFlush && written%flushEvery < int64(n) {
 				flusher.Flush()
 			}
+
+			// Wait for next tick — paces output to match upload speed
+			<-ticker.C
 		}
 
 		if err == io.EOF {
+			if canFlush {
+				flusher.Flush()
+			}
 			return nil
 		}
 		if err != nil {
