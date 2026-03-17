@@ -6,6 +6,7 @@ gradlog/.env
 
 # ── Go ───────────────────────────────────────────────────────────────────────
 gradlog/gradlog
+gradlog/bin/
 gradlog/*.exe
 gradlog/*.test
 gradlog/vendor/
@@ -48,3 +49,4 @@ docker-compose.prod.yml
 scripts/create_gradlog_db_user.sh
 demo/
 scripts/
+gradlog/bin/gradlog

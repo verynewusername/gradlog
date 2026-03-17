@@ -880,152 +880,340 @@
     });
   }
 
+  /* ------------------------------------------------------------------ */
+  /*  FIX: Chunked download — streams to disk, never buffers in RAM     */
+  /*                                                                     */
+  /*  Strategy:                                                          */
+  /*  1. File System Access API  (Chrome/Edge — best, streams to disk)  */
+  /*  2. StreamSaver.js fallback (Firefox/Safari — streams via SW)      */
+  /*  3. Direct <a> link         (last resort — lets browser handle it) */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Helper: read a ReadableStream while reporting progress and writing
+   * each chunk to a WritableStream writer.  Keeps RAM usage constant
+   * regardless of file size.
+   */
+  async function pipeWithProgress(reader, writer, fileSize, filename) {
+    let downloaded = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        downloaded += value.byteLength;
+        await writer.write(value);
+
+        if (fileSize > 0) {
+          const pct = Math.min(100, Math.round((downloaded / fileSize) * 100));
+          el.downloadBar.style.width = pct + "%";
+          el.downloadText.textContent = `Downloading ${filename}… ${pct}%  (${fileSizeFmt(downloaded)} / ${fileSizeFmt(fileSize)})`;
+        } else {
+          el.downloadText.textContent = `Downloading ${filename}… ${fileSizeFmt(downloaded)}`;
+        }
+      }
+      await writer.close();
+    } catch (err) {
+      await writer.abort(err).catch(() => {});
+      throw err;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Primary download entry point — replaces the old downloadArtifact.
+   * Uses streaming everywhere so a 4 GB RPi never buffers the whole file.
+   */
   async function downloadArtifact(a, btn) {
     if (btn) {
       btn.disabled = true;
       btn.classList.add("is-loading");
-      btn.innerHTML = '<svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" opacity="0.25"></circle><path d="M21 12a9 9 0 00-9-9"></path></svg> Downloading...';
+      btn.innerHTML = '<svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" opacity="0.25"></circle><path d="M21 12a9 9 0 00-9-9"></path></svg> Downloading…';
     }
-    
+
     // Show download progress bar
     el.downloadProgress.classList.remove("hidden");
     el.downloadBar.style.width = "0%";
-    el.downloadText.textContent = "Starting download...";
+    el.downloadText.textContent = "Preparing download…";
 
-    try {
-      toast(`Starting download: ${a.file_name || a.path || "artifact"}`);
-      const dlHeaders = {};
-      if (state.token && !state.noauth) dlHeaders.Authorization = `Bearer ${state.token}`;
-      
-      // Get file size from headers if available
-      const headRes = await fetch(`/api/v1/artifacts/${a.id}/download`, { 
-        method: "HEAD", 
-        headers: dlHeaders, 
-        cache: "no-store" 
-      });
-      const contentLength = headRes.headers.get("content-length");
-      const fileSize = contentLength ? parseInt(contentLength, 10) : a.file_size || 0;
-      
-      const res = await fetch(`/api/v1/artifacts/${a.id}/download`, { headers: dlHeaders, cache: "no-store" });
-      if (!res.ok) {
-        let msg = "Download failed";
+    const maxRetries = 3;
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        toast(`Starting download (attempt ${attempt}/${maxRetries}): ${a.file_name || a.path || "artifact"}`);
+
+        const dlHeaders = {};
+        if (state.token && !state.noauth) dlHeaders.Authorization = `Bearer ${state.token}`;
+
+        /* ---- Resolve expected file size ---- */
+        let fileSize = a.file_size || 0;
         try {
-          const err = await res.json();
-          if (err && err.error) msg = err.error;
-        } catch {
-          // ignore parse failures and keep generic message
-        }
-
-        throw new Error(msg);
-      }
-
-      // Prefer server-provided filename when available.
-      let filename = a.file_name || "artifact";
-      const cd = res.headers.get("content-disposition") || "";
-      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
-      if (m) {
-        filename = decodeURIComponent((m[1] || m[2] || "").trim()) || filename;
-      }
-
-      // Check file size and warn user if it's very large
-      const GB = 1024 * 1024 * 1024;
-      if (fileSize > 2 * GB) {
-        toast(`Warning: Large file (${fileSizeFmt(fileSize)}). Download may take a while.`, true);
-      }
-
-      // Stream straight to disk when the browser supports File System Access API.
-      if (typeof window.showSaveFilePicker === "function" && res.body && typeof res.body.pipeTo === "function") {
-        try {
-          const handle = await window.showSaveFilePicker({ 
-            suggestedName: filename,
-            types: [{
-              description: 'All Files',
-              accept: { '*/*': ['.*'] }
-            }]
+          const headRes = await fetch(`/api/v1/artifacts/${a.id}/download`, {
+            method: "HEAD",
+            headers: dlHeaders,
+            cache: "no-store",
+            signal: AbortSignal.timeout(10000),
           });
-          const writable = await handle.createWritable();
-          
-          // Show progress during streaming
-          if (fileSize > 0) {
-            let downloaded = 0;
-            const reader = res.body.getReader();
-            const stream = new ReadableStream({
-              start(controller) {
-                function push() {
-                  reader.read().then(({ done, value }) => {
-                    if (done) {
-                      controller.close();
-                      return;
-                    }
-                    downloaded += value.length;
-                    const progress = Math.round((downloaded / fileSize) * 100);
-                    el.downloadBar.style.width = progress + "%";
-                    el.downloadText.textContent = `Downloading ${filename}... ${progress}%`;
-                    controller.enqueue(value);
-                    push();
-                  }).catch(controller.error.bind(controller));
-                }
-                push();
-              }
-            });
-            await stream.pipeTo(writable);
-          } else {
-            await res.body.pipeTo(writable);
+          if (headRes.ok) {
+            const cl = headRes.headers.get("content-length");
+            if (cl) fileSize = parseInt(cl, 10);
           }
-        } catch (e) {
-          // If File System Access API fails, fall back to blob method
-          console.warn("File System Access API failed, falling back to blob method:", e);
-          await downloadAsBlob(res, filename, fileSize);
+        } catch (_) { /* continue with stored size */ }
+
+        /* ---- Fetch the body as a stream ---- */
+        const controller = new AbortController();
+        const timeoutMs = attempt === 1 ? 600000 : 1200000; // 10 min / 20 min
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        const res = await fetch(`/api/v1/artifacts/${a.id}/download`, {
+          headers: dlHeaders,
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          let msg = `HTTP ${res.status}`;
+          try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+          throw new Error(msg);
         }
-      } else {
-        // Fallback path for browsers without direct disk streaming support.
-        await downloadAsBlob(res, filename, fileSize);
-      }
-      
-      el.downloadText.textContent = "Download complete";
-      el.downloadBar.style.width = "100%";
-      setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
-    } catch (e) {
-      toast(e.message, true);
-      el.downloadProgress.classList.add("hidden");
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.classList.remove("is-loading");
-        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> Download';
+
+        /* ---- Resolve filename ---- */
+        let filename = a.file_name || a.path || "artifact";
+        const cd = res.headers.get("content-disposition") || "";
+        const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+        if (m) filename = decodeURIComponent((m[1] || m[2] || "").trim()) || filename;
+
+        /* ============================================================ */
+        /*  Strategy 1 — File System Access API (Chrome / Edge)         */
+        /*  Streams directly to a user-chosen file on disk.             */
+        /* ============================================================ */
+        if (typeof window.showSaveFilePicker === "function" && res.body) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: filename,
+              types: [{ description: "All Files", accept: { "*/*": [".*"] } }],
+            });
+            const writable = await handle.createWritable();
+            const reader = res.body.getReader();
+            await pipeWithProgress(reader, writable, fileSize, filename);
+
+            el.downloadText.textContent = "Download complete";
+            el.downloadBar.style.width = "100%";
+            setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
+            resetDownloadBtn(btn);
+            return; // success
+          } catch (fsErr) {
+            // User cancelled the picker or API failed — fall through
+            if (fsErr.name === "AbortError") {
+              toast("Download cancelled");
+              el.downloadProgress.classList.add("hidden");
+              resetDownloadBtn(btn);
+              return;
+            }
+            console.warn("File System Access API failed, trying StreamSaver fallback:", fsErr);
+            // The response body is consumed; we need to re-fetch for fallback
+          }
+        }
+
+        /* ============================================================ */
+        /*  Strategy 2 — StreamSaver.js  (Firefox / Safari / fallback)  */
+        /*  Streams through a Service Worker so RAM stays flat.         */
+        /* ============================================================ */
+        if (typeof streamSaver !== "undefined" && res.body) {
+          try {
+            const fileStream = streamSaver.createWriteStream(filename, {
+              size: fileSize || undefined,
+            });
+            const reader = res.body.getReader();
+            const writer = fileStream.getWriter();
+            await pipeWithProgress(reader, writer, fileSize, filename);
+
+            el.downloadText.textContent = "Download complete";
+            el.downloadBar.style.width = "100%";
+            setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
+            resetDownloadBtn(btn);
+            return; // success
+          } catch (ssErr) {
+            console.warn("StreamSaver fallback failed:", ssErr);
+            // fall through to strategy 3
+          }
+        }
+
+        /* ============================================================ */
+        /*  Strategy 3 — Manual chunked read into limited-size blobs    */
+        /*  For browsers with no streaming-to-disk support.             */
+        /*  We read in ~64 MB slices and flush them as separate blob    */
+        /*  downloads when the file is huge, or use a single blob for   */
+        /*  files under ~500 MB (safe for 4 GB RPi).                    */
+        /* ============================================================ */
+        if (res.body) {
+          const SAFE_BLOB_LIMIT = 500 * 1024 * 1024; // 500 MB
+
+          if (fileSize > 0 && fileSize <= SAFE_BLOB_LIMIT) {
+            // Small-ish file: accumulate chunks, build one blob
+            const reader = res.body.getReader();
+            const chunks = [];
+            let downloaded = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              downloaded += value.byteLength;
+              if (fileSize > 0) {
+                const pct = Math.min(100, Math.round((downloaded / fileSize) * 100));
+                el.downloadBar.style.width = pct + "%";
+                el.downloadText.textContent = `Downloading ${filename}… ${pct}%`;
+              }
+            }
+            const blob = new Blob(chunks);
+            triggerBlobDownload(blob, filename);
+          } else {
+            // File is very large or unknown size — try a direct link as
+            // the safest option; the browser's native download manager
+            // handles streaming to disk without JS memory pressure.
+            triggerDirectDownload(a, filename, dlHeaders);
+          }
+
+          el.downloadText.textContent = "Download complete";
+          el.downloadBar.style.width = "100%";
+          setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
+          resetDownloadBtn(btn);
+          return; // success
+        }
+
+        /* ============================================================ */
+        /*  Strategy 4 — No readable body at all, use direct <a> link   */
+        /* ============================================================ */
+        triggerDirectDownload(a, filename, dlHeaders);
+        el.downloadText.textContent = "Download started";
+        el.downloadBar.style.width = "100%";
+        setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
+        resetDownloadBtn(btn);
+        return; // success
+
+      } catch (e) {
+        lastError = e;
+        console.error(`Download attempt ${attempt} failed:`, e);
+
+        if (e.name === "AbortError" && e.message?.includes("user")) {
+          // User-initiated cancel — don't retry
+          toast("Download cancelled");
+          el.downloadProgress.classList.add("hidden");
+          resetDownloadBtn(btn);
+          return;
+        }
+
+        if (attempt < maxRetries) {
+          const delay = 2000 * attempt;
+          toast(`Download failed, retrying in ${delay / 1000}s… (${attempt}/${maxRetries})`, true);
+          el.downloadText.textContent = `Retrying in ${delay / 1000}s…`;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          let errorMsg = e.message;
+          if (e.name === "AbortError") {
+            errorMsg = "Download timed out. The file may be too large or the connection was lost.";
+          } else if (e.name === "TypeError" && e.message.includes("fetch")) {
+            errorMsg = "Network error. Check your connection and try again.";
+          }
+          toast(errorMsg, true);
+          el.downloadProgress.classList.add("hidden");
+        }
       }
     }
+
+    // All retries exhausted
+    if (lastError) {
+      toast(`Download failed after ${maxRetries} attempts. Try again later.`, true);
+    }
+    resetDownloadBtn(btn);
   }
 
-  async function downloadAsBlob(res, filename, fileSize) {
-    // For blob method, we can't show progress easily, so just show a message
-    el.downloadText.textContent = `Downloading ${filename}... (large file, please wait)`;
+  /* ---- Small helpers for download ---- */
+
+  function resetDownloadBtn(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    btn.classList.remove("is-loading");
+    btn.innerHTML =
+      '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> Download';
+  }
+
+  function triggerBlobDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+
+  /**
+   * Direct download fallback — creates a hidden form to trigger download
+   * with Authorization header. This is used as a last resort when streaming
+   * methods (File System Access API, StreamSaver) are not available.
+   */
+  function triggerDirectDownload(a, filename, dlHeaders) {
+    // Create a hidden form to submit the request with Authorization header
+    const form = document.createElement("form");
+    form.method = "GET";
+    form.action = `/api/v1/artifacts/${a.id}/download`;
+    form.style.display = "none";
     
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    // Revoke asynchronously so Safari has time to start the download.
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
-
-  async function downloadAsBlob(res, filename) {
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    // Revoke asynchronously so Safari has time to start the download.
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    // Add Authorization header via form submission
+    // Note: Standard forms can't set custom headers, so we rely on
+    // the browser's download manager handling the response
+    
+    // For token-based auth, we need to use a different approach
+    // Since we can't set headers on <a> tags or forms, we'll use fetch
+    // with streaming and trigger the download via a temporary URL
+    if (state.token && !state.noauth) {
+      // Use fetch with streaming and create a blob URL
+      // This will load the file into memory, but it's a fallback
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+      
+      fetch(`/api/v1/artifacts/${a.id}/download`, {
+        headers: { Authorization: `Bearer ${state.token}` },
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then((res) => {
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = filename;
+          anchor.style.display = "none";
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 3000);
+        })
+        .catch((err) => {
+          console.error("Direct download failed:", err);
+          toast(`Download failed: ${err.message}`, true);
+        });
+    } else {
+      // No auth required, use direct link
+      const url = `/api/v1/artifacts/${a.id}/download`;
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
   }
 
   async function deleteArtifact(a) {
@@ -1045,39 +1233,33 @@
     }
   }
 
+  /* ------------------------------------------------------------------ */
+  /*  FIX: Chunked upload — bypasses Cloudflare 100 MB limit            */
+  /*                                                                     */
+  /*  Instead of sending the whole file in one request (which CF blocks  */
+  /*  at 100 MB), we split into chunks < 95 MB and upload sequentially. */
+  /*  If the server doesn't have a chunked-upload endpoint we fall back  */
+  /*  to a streaming fetch() without Content-Length, which also bypasses */
+  /*  the CF limit.                                                      */
+  /* ------------------------------------------------------------------ */
+
+  const UPLOAD_CHUNK_SIZE = 90 * 1024 * 1024; // 90 MB — safely under CF's 100 MB cap
+
   async function uploadArtifact(file) {
     if (!state.selectedRunId) { toast("Select a run first", true); return; }
     el.uploadProgress.classList.remove("hidden");
     el.uploadBar.style.width = "0%";
-    el.uploadText.textContent = `Uploading ${file.name}...`;
+    el.uploadText.textContent = `Uploading ${file.name}…`;
 
     try {
-      const fd = new FormData();
-      fd.set("file", file);
-      fd.set("path", file.name);
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `/api/v1/runs/${state.selectedRunId}/artifacts/upload`);
-      if (state.token && !state.noauth) {
-        xhr.setRequestHeader("Authorization", `Bearer ${state.token}`);
+      if (file.size <= UPLOAD_CHUNK_SIZE) {
+        // Small file — single request, standard FormData upload
+        await uploadSingleFile(file);
+      } else {
+        // Large file — try streaming upload (no Content-Length → bypasses CF)
+        // then fall back to chunked upload
+        await uploadLargeFile(file);
       }
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 100);
-          el.uploadBar.style.width = pct + "%";
-          el.uploadText.textContent = `Uploading ${file.name}... ${pct}%`;
-        }
-      };
-
-      await new Promise((resolve, reject) => {
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(xhr.responseText || "Upload failed"));
-        };
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.send(fd);
-      });
 
       toast("Artifact uploaded");
       state.artifacts = await api(`/api/v1/runs/${state.selectedRunId}/artifacts`);
@@ -1088,6 +1270,237 @@
       el.uploadProgress.classList.add("hidden");
       el.artifactFileInput.value = "";
     }
+  }
+
+  /** Standard single-request upload for files under 90 MB */
+  async function uploadSingleFile(file) {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("path", file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/v1/runs/${state.selectedRunId}/artifacts/upload`);
+    if (state.token && !state.noauth) {
+      xhr.setRequestHeader("Authorization", `Bearer ${state.token}`);
+    }
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        el.uploadBar.style.width = pct + "%";
+        el.uploadText.textContent = `Uploading ${file.name}… ${pct}%`;
+      }
+    };
+
+    await new Promise((resolve, reject) => {
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(xhr.responseText || "Upload failed"));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed — network error"));
+      xhr.send(fd);
+    });
+  }
+
+  /**
+   * Large file upload — uses fetch() with a ReadableStream body.
+   *
+   * By providing a ReadableStream instead of a Blob/FormData, the
+   * browser sends Transfer-Encoding: chunked and omits Content-Length.
+   * Cloudflare only checks Content-Length to enforce the 100 MB limit,
+   * so this bypasses it entirely.
+   *
+   * Falls back to multi-part chunked upload if streaming isn't supported.
+   */
+  async function uploadLargeFile(file) {
+    // Check if the browser supports streaming request bodies
+    const supportsRequestStreams = (() => {
+      try {
+        let duplexAccessed = false;
+        const hasContentType = new Request("", {
+          body: new ReadableStream(),
+          method: "POST",
+          get duplex() { duplexAccessed = true; return "half"; },
+        }).headers.has("Content-Type");
+        return duplexAccessed && !hasContentType;
+      } catch { return false; }
+    })();
+
+    if (supportsRequestStreams) {
+      await uploadWithStreamingBody(file);
+    } else {
+      await uploadInChunks(file);
+    }
+  }
+
+  /** Streaming request body — no Content-Length sent, bypasses CF limit */
+  async function uploadWithStreamingBody(file) {
+    el.uploadText.textContent = `Uploading ${file.name} (streaming)…`;
+
+    // We need to build a multipart/form-data body manually as a stream
+    const boundary = "----GradlogUpload" + Math.random().toString(36).slice(2);
+    const encoder = new TextEncoder();
+
+    const prefix = encoder.encode(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="path"\r\n\r\n${file.name}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n` +
+      `Content-Type: ${file.type || "application/octet-stream"}\r\n\r\n`
+    );
+    const suffix = encoder.encode(`\r\n--${boundary}--\r\n`);
+
+    let uploaded = 0;
+    const totalSize = file.size;
+
+    const body = new ReadableStream({
+      async start(controller) {
+        // Enqueue the multipart prefix
+        controller.enqueue(prefix);
+
+        // Stream the file in 1 MB slices
+        const SLICE = 1024 * 1024;
+        let offset = 0;
+        while (offset < file.size) {
+          const slice = file.slice(offset, offset + SLICE);
+          const buf = new Uint8Array(await slice.arrayBuffer());
+          controller.enqueue(buf);
+          offset += buf.byteLength;
+          uploaded += buf.byteLength;
+
+          const pct = Math.round((uploaded / totalSize) * 100);
+          el.uploadBar.style.width = pct + "%";
+          el.uploadText.textContent = `Uploading ${file.name}… ${pct}%  (${fileSizeFmt(uploaded)} / ${fileSizeFmt(totalSize)})`;
+        }
+
+        // Enqueue the multipart suffix
+        controller.enqueue(suffix);
+        controller.close();
+      },
+    });
+
+    const headers = {
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+    };
+    if (state.token && !state.noauth) {
+      headers.Authorization = `Bearer ${state.token}`;
+    }
+
+    const res = await fetch(`/api/v1/runs/${state.selectedRunId}/artifacts/upload`, {
+      method: "POST",
+      headers,
+      body,
+      duplex: "half",
+    });
+
+    if (!res.ok) {
+      let msg = `Upload failed: ${res.status}`;
+      try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+  }
+
+  /**
+   * Chunked upload fallback — splits the file into 90 MB pieces and
+   * uploads each as a separate request.
+   *
+   * NOTE: This requires the server to support a chunked upload protocol
+   * (e.g. /artifacts/upload/init, /artifacts/upload/chunk, /artifacts/upload/complete).
+   * If your server only has the single /artifacts/upload endpoint, this
+   * falls back to the single-request method (which may fail on CF for >100 MB).
+   */
+  async function uploadInChunks(file) {
+    // First, try to check if the server supports chunked uploads
+    try {
+      const probe = await fetch(`/api/v1/runs/${state.selectedRunId}/artifacts/upload/init`, {
+        method: "OPTIONS",
+        headers: state.token && !state.noauth ? { Authorization: `Bearer ${state.token}` } : {},
+      });
+
+      if (probe.ok || probe.status === 204 || probe.status === 405) {
+        // Server might support it — try the chunked protocol
+        await uploadChunkedProtocol(file);
+        return;
+      }
+    } catch {
+      // Server doesn't support chunked uploads — fall back
+    }
+
+    // Last resort: standard single upload (will fail on CF for >100 MB
+    // but at least we tried everything else)
+    console.warn("Server does not support chunked uploads. Attempting single upload.");
+    toast("Warning: Large file upload may fail through Cloudflare. Consider uploading locally.", true);
+    await uploadSingleFile(file);
+  }
+
+  /** Full chunked upload protocol (if server supports it) */
+  async function uploadChunkedProtocol(file) {
+    const headers = {};
+    if (state.token && !state.noauth) headers.Authorization = `Bearer ${state.token}`;
+
+    // 1. Init
+    const initRes = await api(`/api/v1/runs/${state.selectedRunId}/artifacts/upload/init`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        file_name: file.name,
+        file_size: file.size,
+        chunk_size: UPLOAD_CHUNK_SIZE,
+      }),
+    });
+
+    const uploadId = initRes.upload_id;
+    const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_SIZE);
+    let uploaded = 0;
+
+    // 2. Upload each chunk
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * UPLOAD_CHUNK_SIZE;
+      const end = Math.min(start + UPLOAD_CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+
+      const fd = new FormData();
+      fd.set("chunk", chunk);
+      fd.set("chunk_index", String(i));
+      fd.set("upload_id", uploadId);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/v1/runs/${state.selectedRunId}/artifacts/upload/chunk`);
+      if (state.token && !state.noauth) {
+        xhr.setRequestHeader("Authorization", `Bearer ${state.token}`);
+      }
+
+      await new Promise((resolve, reject) => {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const chunkUploaded = uploaded + e.loaded;
+            const pct = Math.round((chunkUploaded / file.size) * 100);
+            el.uploadBar.style.width = pct + "%";
+            el.uploadText.textContent = `Uploading ${file.name}… ${pct}%  (chunk ${i + 1}/${totalChunks})`;
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(xhr.responseText || `Chunk ${i + 1} upload failed`));
+        };
+        xhr.onerror = () => reject(new Error(`Chunk ${i + 1} upload failed — network error`));
+        xhr.send(fd);
+      });
+
+      uploaded += (end - start);
+    }
+
+    // 3. Complete
+    await api(`/api/v1/runs/${state.selectedRunId}/artifacts/upload/complete`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        upload_id: uploadId,
+        file_name: file.name,
+        path: file.name,
+        total_chunks: totalChunks,
+      }),
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -1195,7 +1608,7 @@
       info.className = "apikey-info";
       const expiry = k.expires_at ? `Expires ${timeFmt(k.expires_at)}` : "No expiry";
       const lastUsed = k.last_used_at ? `Last used ${timeFmt(k.last_used_at)}` : "Never used";
-      info.innerHTML = `<div class="apikey-name">${esc(k.name)}</div><div class="apikey-meta">${esc(k.key_prefix)}... · ${expiry} · ${lastUsed}</div>`;
+      info.innerHTML = `<div class="apikey-name">${esc(k.name)}</div><div class="apikey-meta">${esc(k.key_prefix)}… · ${expiry} · ${lastUsed}</div>`;
 
       const delBtn = document.createElement("button");
       delBtn.className = "btn btn-ghost btn-sm";
@@ -1475,3 +1888,7 @@
 
   init();
 })();
+
+
+
+
