@@ -939,7 +939,6 @@
       const dlHeaders = {};
       if (state.token && !state.noauth) dlHeaders.Authorization = `Bearer ${state.token}`;
 
-      // Step 1: Get download info (chunk count, chunk size)
       const info = await api(`/api/v1/artifacts/${a.id}/download-info`);
       const totalChunks = info.total_chunks;
       const totalSize = info.file_size;
@@ -947,7 +946,7 @@
 
       toast(`Downloading ${filename} in ${totalChunks} chunk(s)…`);
 
-      // Step 2: Try File System Access API (streams to disk, no RAM pressure)
+      // Strategy 1: File System Access API (Chrome/Edge — best)
       if (typeof window.showSaveFilePicker === "function") {
         try {
           const handle = await window.showSaveFilePicker({
@@ -958,28 +957,14 @@
           let downloaded = 0;
 
           for (let i = 0; i < totalChunks; i++) {
-            const res = await fetch(`/api/v1/artifacts/${a.id}/chunks/${i}`, {
-              headers: dlHeaders,
-              cache: "no-store",
-            });
-            if (!res.ok) throw new Error(`Chunk ${i} failed: HTTP ${res.status}`);
-
-            const reader = res.body.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              await writable.write(value);
-              downloaded += value.byteLength;
-              const pct = Math.min(100, Math.round((downloaded / totalSize) * 100));
-              el.downloadBar.style.width = pct + "%";
-              el.downloadText.textContent = `Downloading ${filename}… ${pct}% (${fileSizeFmt(downloaded)} / ${fileSizeFmt(totalSize)}) — chunk ${i + 1}/${totalChunks}`;
-            }
+            const chunkData = await fetchChunkWithRetry(a.id, i, dlHeaders);
+            await writable.write(chunkData);
+            downloaded += chunkData.byteLength;
+            updateProgress(downloaded, totalSize, filename, i, totalChunks);
           }
 
           await writable.close();
-          el.downloadText.textContent = "Download complete";
-          el.downloadBar.style.width = "100%";
-          setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
+          downloadComplete();
           resetDownloadBtn(btn);
           return;
         } catch (fsErr) {
@@ -993,83 +978,85 @@
         }
       }
 
-      // Step 3: Fallback — StreamSaver.js (Firefox/Safari)
-      if (typeof streamSaver !== "undefined") {
-        try {
-          const fileStream = streamSaver.createWriteStream(filename, { size: totalSize });
-          const writer = fileStream.getWriter();
-          let downloaded = 0;
+      // Strategy 2: Blob accumulation (works everywhere including Brave)
+      // Download chunks as ArrayBuffers, then combine into a single Blob
+      // ArrayBuffers are more memory-efficient than Blobs for accumulation
+      const chunks = [];
+      let downloaded = 0;
 
-          for (let i = 0; i < totalChunks; i++) {
-            const res = await fetch(`/api/v1/artifacts/${a.id}/chunks/${i}`, {
-              headers: dlHeaders,
-              cache: "no-store",
-            });
-            if (!res.ok) throw new Error(`Chunk ${i} failed: HTTP ${res.status}`);
-
-            const reader = res.body.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              await writer.write(value);
-              downloaded += value.byteLength;
-              const pct = Math.min(100, Math.round((downloaded / totalSize) * 100));
-              el.downloadBar.style.width = pct + "%";
-              el.downloadText.textContent = `Downloading ${filename}… ${pct}% — chunk ${i + 1}/${totalChunks}`;
-            }
-          }
-
-          await writer.close();
-          el.downloadText.textContent = "Download complete";
-          el.downloadBar.style.width = "100%";
-          setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
-          resetDownloadBtn(btn);
-          return;
-        } catch (ssErr) {
-          console.warn("StreamSaver fallback failed:", ssErr);
-        }
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkData = await fetchChunkWithRetry(a.id, i, dlHeaders);
+        chunks.push(chunkData);
+        downloaded += chunkData.byteLength;
+        updateProgress(downloaded, totalSize, filename, i, totalChunks);
       }
 
-      // Step 4: Last resort — blob accumulation (only for files < 500 MB)
-      if (totalSize < 500 * 1024 * 1024) {
-        const chunks = [];
-        let downloaded = 0;
+      const fullBlob = new Blob(chunks);
+      // Free the ArrayBuffer references immediately
+      chunks.length = 0;
 
-        for (let i = 0; i < totalChunks; i++) {
-          const res = await fetch(`/api/v1/artifacts/${a.id}/chunks/${i}`, {
-            headers: dlHeaders,
-            cache: "no-store",
-          });
-          if (!res.ok) throw new Error(`Chunk ${i} failed: HTTP ${res.status}`);
-
-          const blob = await res.blob();
-          chunks.push(blob);
-          downloaded += blob.size;
-          const pct = Math.min(100, Math.round((downloaded / totalSize) * 100));
-          el.downloadBar.style.width = pct + "%";
-          el.downloadText.textContent = `Downloading ${filename}… ${pct}% — chunk ${i + 1}/${totalChunks}`;
-        }
-
-        const fullBlob = new Blob(chunks);
-        triggerBlobDownload(fullBlob, filename);
-        el.downloadText.textContent = "Download complete";
-        el.downloadBar.style.width = "100%";
-        setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
-        resetDownloadBtn(btn);
-        return;
-      }
-
-      // File too large for blob and no streaming API available
-      toast("Browser does not support streaming downloads for files this large. Use Chrome or Edge.", true);
+      triggerBlobDownload(fullBlob, filename);
+      downloadComplete();
+      resetDownloadBtn(btn);
 
     } catch (e) {
       console.error("Download failed:", e);
       toast(e.message, true);
       el.downloadProgress.classList.add("hidden");
+      resetDownloadBtn(btn);
     }
-
-    resetDownloadBtn(btn);
   }
+
+  async function fetchChunkWithRetry(artifactId, chunkIndex, headers, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(`/api/v1/artifacts/${artifactId}/chunks/${chunkIndex}`, {
+          headers,
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`Chunk ${chunkIndex} failed: HTTP ${res.status}`);
+        return await res.arrayBuffer();
+      } catch (err) {
+        if (attempt === maxRetries) throw err;
+        const delay = 1000 * attempt;
+        el.downloadText.textContent = `Chunk ${chunkIndex} failed, retrying in ${delay / 1000}s…`;
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+
+  function updateProgress(downloaded, totalSize, filename, chunkIndex, totalChunks) {
+    const pct = Math.min(100, Math.round((downloaded / totalSize) * 100));
+    el.downloadBar.style.width = pct + "%";
+    el.downloadText.textContent = `Downloading ${filename}… ${pct}% (${fileSizeFmt(downloaded)} / ${fileSizeFmt(totalSize)}) — chunk ${chunkIndex + 1}/${totalChunks}`;
+  }
+
+  function downloadComplete() {
+    el.downloadText.textContent = "Download complete";
+    el.downloadBar.style.width = "100%";
+    setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
+  }
+
+  function resetDownloadBtn(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    btn.classList.remove("is-loading");
+    btn.innerHTML =
+      '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> Download';
+  }
+
+  function triggerBlobDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+
 
   function resetDownloadBtn(btn) {
     if (!btn) return;
