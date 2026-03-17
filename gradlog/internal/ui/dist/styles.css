@@ -471,7 +471,7 @@ select { cursor: pointer; }
 .item-action-btn:hover {
   color: var(--red);
   border-color: var(--red-bg);
-  background: color-mix(in oklab, var(--red-bg) 40%, transparent);
+  background: var(--red-bg);
 }
 .hint { color: var(--text-3); font-size: 11px; padding: 6px 8px; font-style: italic; }
 
@@ -729,6 +729,24 @@ select { cursor: pointer; }
 }
 .upload-text { font-size: 11px; color: var(--text-3); }
 
+/* --- Download -------------------------------------------------------- */
+.download-progress { margin-bottom: 12px; }
+.download-progress-bar {
+  height: 4px;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.download-bar {
+  height: 100%;
+  background: var(--green);
+  border-radius: 999px;
+  width: 0%;
+  transition: width 200ms;
+}
+.download-text { font-size: 11px; color: var(--text-3); }
+
 /* --- Members ------------------------------------------------------- */
 .member-form { margin-bottom: 16px; }
 .member-form-row { display: flex; gap: 8px; align-items: center; }
@@ -883,7 +901,7 @@ select { cursor: pointer; }
   animation: slideUp 180ms ease;
 }
 .toast.toast-error {
-  color: #fff;
+  color: var(--toast-fg);
   background: var(--toast-error-bg);
 }
 

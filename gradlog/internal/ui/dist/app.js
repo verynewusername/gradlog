@@ -93,6 +93,9 @@
     uploadProgress: $("uploadProgress"),
     uploadBar: $("uploadBar"),
     uploadText: $("uploadText"),
+    downloadProgress: $("downloadProgress"),
+    downloadBar: $("downloadBar"),
+    downloadText: $("downloadText"),
     artifactList: $("artifactList"),
 
     // Members
@@ -311,6 +314,8 @@
       if (state.activeView !== "members" && state.activeView !== "apikeys") {
         showView("members");
       }
+      // Update settings scope when switching to settings tab
+      updateSettingsScope();
     } else {
       showView("run");
     }
@@ -881,11 +886,26 @@
       btn.classList.add("is-loading");
       btn.innerHTML = '<svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" opacity="0.25"></circle><path d="M21 12a9 9 0 00-9-9"></path></svg> Downloading...';
     }
+    
+    // Show download progress bar
+    el.downloadProgress.classList.remove("hidden");
+    el.downloadBar.style.width = "0%";
+    el.downloadText.textContent = "Starting download...";
 
     try {
       toast(`Starting download: ${a.file_name || a.path || "artifact"}`);
       const dlHeaders = {};
       if (state.token && !state.noauth) dlHeaders.Authorization = `Bearer ${state.token}`;
+      
+      // Get file size from headers if available
+      const headRes = await fetch(`/api/v1/artifacts/${a.id}/download`, { 
+        method: "HEAD", 
+        headers: dlHeaders, 
+        cache: "no-store" 
+      });
+      const contentLength = headRes.headers.get("content-length");
+      const fileSize = contentLength ? parseInt(contentLength, 10) : a.file_size || 0;
+      
       const res = await fetch(`/api/v1/artifacts/${a.id}/download`, { headers: dlHeaders, cache: "no-store" });
       if (!res.ok) {
         let msg = "Download failed";
@@ -907,27 +927,67 @@
         filename = decodeURIComponent((m[1] || m[2] || "").trim()) || filename;
       }
 
+      // Check file size and warn user if it's very large
+      const GB = 1024 * 1024 * 1024;
+      if (fileSize > 2 * GB) {
+        toast(`Warning: Large file (${fileSizeFmt(fileSize)}). Download may take a while.`, true);
+      }
+
       // Stream straight to disk when the browser supports File System Access API.
       if (typeof window.showSaveFilePicker === "function" && res.body && typeof res.body.pipeTo === "function") {
-        const handle = await window.showSaveFilePicker({ suggestedName: filename });
-        const writable = await handle.createWritable();
-        await res.body.pipeTo(writable);
+        try {
+          const handle = await window.showSaveFilePicker({ 
+            suggestedName: filename,
+            types: [{
+              description: 'All Files',
+              accept: { '*/*': ['.*'] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          
+          // Show progress during streaming
+          if (fileSize > 0) {
+            let downloaded = 0;
+            const reader = res.body.getReader();
+            const stream = new ReadableStream({
+              start(controller) {
+                function push() {
+                  reader.read().then(({ done, value }) => {
+                    if (done) {
+                      controller.close();
+                      return;
+                    }
+                    downloaded += value.length;
+                    const progress = Math.round((downloaded / fileSize) * 100);
+                    el.downloadBar.style.width = progress + "%";
+                    el.downloadText.textContent = `Downloading ${filename}... ${progress}%`;
+                    controller.enqueue(value);
+                    push();
+                  }).catch(controller.error.bind(controller));
+                }
+                push();
+              }
+            });
+            await stream.pipeTo(writable);
+          } else {
+            await res.body.pipeTo(writable);
+          }
+        } catch (e) {
+          // If File System Access API fails, fall back to blob method
+          console.warn("File System Access API failed, falling back to blob method:", e);
+          await downloadAsBlob(res, filename, fileSize);
+        }
       } else {
         // Fallback path for browsers without direct disk streaming support.
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = filename;
-        anchor.style.display = "none";
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        // Revoke asynchronously so Safari has time to start the download.
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        await downloadAsBlob(res, filename, fileSize);
       }
+      
+      el.downloadText.textContent = "Download complete";
+      el.downloadBar.style.width = "100%";
+      setTimeout(() => el.downloadProgress.classList.add("hidden"), 1500);
     } catch (e) {
       toast(e.message, true);
+      el.downloadProgress.classList.add("hidden");
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -935,6 +995,37 @@
         btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> Download';
       }
     }
+  }
+
+  async function downloadAsBlob(res, filename, fileSize) {
+    // For blob method, we can't show progress easily, so just show a message
+    el.downloadText.textContent = `Downloading ${filename}... (large file, please wait)`;
+    
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    // Revoke asynchronously so Safari has time to start the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  async function downloadAsBlob(res, filename) {
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    // Revoke asynchronously so Safari has time to start the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
   async function deleteArtifact(a) {
