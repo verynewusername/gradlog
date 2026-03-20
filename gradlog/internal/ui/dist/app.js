@@ -1007,23 +1007,32 @@
     }
   }
 
-  async function fetchChunkWithRetry(artifactId, chunkIndex, headers, maxRetries = 3) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const res = await fetch(`/api/v1/artifacts/${artifactId}/chunks/${chunkIndex}`, {
-          headers,
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`Chunk ${chunkIndex} failed: HTTP ${res.status}`);
-        return await res.arrayBuffer();
-      } catch (err) {
-        if (attempt === maxRetries) throw err;
-        const delay = 1000 * attempt;
-        el.downloadText.textContent = `Chunk ${chunkIndex} failed, retrying in ${delay / 1000}s…`;
-        await new Promise((r) => setTimeout(r, delay));
-      }
+  async function fetchChunkWithRetry(artifactId, chunkIndex, headers, maxRetries = 5) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      // Per-chunk timeout: 120s should be enough for 20MB chunks
+      const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
+      const res = await fetch(`/api/v1/artifacts/${artifactId}/chunks/${chunkIndex}`, {
+        headers,
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) throw new Error(`Chunk ${chunkIndex} failed: HTTP ${res.status}`);
+      return await res.arrayBuffer();
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      // Exponential backoff: 2s, 4s, 8s, 16s — gives tunnel time to recover
+      const delay = Math.min(2000 * Math.pow(2, attempt - 1), 30000);
+      el.downloadText.textContent =
+        `Chunk ${chunkIndex} failed (attempt ${attempt}/${maxRetries}), retrying in ${delay / 1000}s…`;
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
+}
 
   function updateProgress(downloaded, totalSize, filename, chunkIndex, totalChunks) {
     const pct = Math.min(100, Math.round((downloaded / totalSize) * 100));
