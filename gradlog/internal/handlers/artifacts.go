@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -894,7 +895,8 @@ func parseRangeHeader(rangeHeader string, fileSize int64) (start, end int64, ok 
 }
 
 func streamWithFlush(c *gin.Context, reader io.Reader) error {
-	buf := make([]byte, 32*1024)
+	// Use a smaller buffer (8KB instead of 32KB) to reduce pressure
+	buf := make([]byte, 8*1024)
 	flusher, canFlush := c.Writer.(http.Flusher)
 
 	for {
@@ -906,6 +908,10 @@ func streamWithFlush(c *gin.Context, reader io.Reader) error {
 			if canFlush {
 				flusher.Flush()
 			}
+			// Give cloudflared breathing room —
+			// ~1ms pause per 8KB ≈ ~8 MB/s max throughput
+			// Adjust based on your upload speed
+			time.Sleep(1 * time.Millisecond)
 		}
 
 		if err == io.EOF {
