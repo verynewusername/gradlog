@@ -1,71 +1,107 @@
-# GRADLOG
+<p align="center">
+	<img src="gradlog/internal/ui/dist/brandmark.svg" alt="Gradlog logo" width="96" />
+</p>
 
-Gradlog is a self-hosted ML experiment tracker built for teams that want authentication and access control out of the box.
+<h1 align="center">Gradlog</h1>
 
-It was created from a simple idea: MLflow-style tracking is great, but many teams still need stronger built-in auth and multi-user access patterns for real deployments. Gradlog keeps the workflow simple while adding production-friendly auth and project access management.
+<p align="center">
+	Self-hosted ML experiment tracking with built-in authentication, project membership, API keys, metrics, and artifact management.
+</p>
 
-Gradlog runs as a single service (Go + Gin + Postgres) and serves the web UI directly from the same container.
+<p align="center">
+	<img src="demo.png" alt="Gradlog UI preview" width="1200" />
+</p>
 
-## UI Preview
+Gradlog is a lightweight experiment tracker for teams that want a smaller operational footprint than a large Python web stack while still getting real multi-user access control.
 
-![Gradlog UI](demo.png)
+It runs as a single Go service backed by PostgreSQL and serves the web UI directly from the backend binary.
+
+## Why Gradlog
+
+- Built-in auth and project membership for multi-user teams
+- Single backend service with embedded UI
+- Metrics, parameters, tags, runs, and artifact tracking
+- API key support for SDKs and automation
+- Straightforward self-hosting with Docker Compose
 
 ## Architecture
 
-- API + Web server: Go/Gin
-- Database: PostgreSQL 
-- Auth: opaque API/session tokens (no JWT)
-- UI hosting: static frontend files served by backend
+- Backend: Go + Gin
+- Database: PostgreSQL
+- Auth: Google OAuth or local dev auth bypass
+- UI: Static assets embedded into the backend binary
+- SDK: Python client for logging runs, metrics, and artifacts
 
-## Gradlog vs MLflow
+## Quick Start
 
-Gradlog is intentionally built as a lightweight, self-hosted alternative for teams that want a simpler operational footprint.
-
-- Language/runtime: Gradlog is written in Go and runs as a single compiled service.
-- Deployment model: one service + Postgres, with API and UI served together.
-- Auth focus: built-in user auth, project membership, and API key flows for multi-user teams.
-- Operational overhead: no large Python web stack for the tracking server itself.
-
-MLflow remains a strong choice for broad ecosystem integrations and established workflows. Gradlog focuses on teams that prefer a smaller, auth-first tracker with straightforward self-hosting.
-
-## Run With Docker Compose
-
-1. Copy env template:
+1. Copy the environment template:
 
 ```bash
 cp gradlog/.env.example gradlog/.env
 ```
 
-2. Edit `gradlog/.env` with your values.
+2. For quick local development, enable local auth bypass in `gradlog/.env`:
 
-3. Build and start:
+```env
+DEV_NOAUTH_EMAIL=dev@localhost
+```
+
+3. Start the stack:
 
 ```bash
 docker compose up --build
 ```
 
-4. Open:
+4. Open Gradlog:
 
-- API health: `http://localhost:8080/health`
-- Website: `http://localhost:8080/`
+- App: `http://localhost:8080/`
+- Health: `http://localhost:8080/health`
 
-## Frontend Served By Backend
+## Local Development Demo Data
 
-The gradlog binary embeds static files under `gradlog/internal/ui/dist` and serves them for non-API routes.
+To populate a local development instance with a sample project, experiment, run, metrics, and artifacts including a PNG image:
 
-In the current setup, UI files are committed under `gradlog/internal/ui/dist` and embedded at build time. This means a single container serves both API and website.
+```bash
+make seed-local-dev
+```
 
-## Google OAuth (Optional)
+This creates:
 
-If you enable Google OAuth, set these values in `gradlog/.env`:
+- Project: `demo-local`
+- Experiment: `dev-mode-seed`
+- Run: `seeded-ui-demo-run`
+- Metrics: sample `train/loss` and `train/accuracy` values
+- Artifacts:
+	`images/seed-preview.png`
+	`docs/run-notes.txt`
+	`metadata/summary.json`
+
+The seed script is designed to work with `DEV_NOAUTH_EMAIL` enabled, so you can bring up localhost and immediately inspect the UI without configuring Google OAuth first.
+
+## Authentication Modes
+
+### Local dev mode
+
+Use this when you want to test the app locally without a login flow:
+
+```env
+DEV_NOAUTH_EMAIL=dev@localhost
+FRONTEND_URL=http://localhost:8080
+```
+
+When enabled, every request is treated as authenticated as that synthetic user. This is only for local development and should never be used in production.
+
+### Google OAuth mode
+
+If you want to test the real login flow, set these values in `gradlog/.env`:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URL`
 
-For your domain (e.g. `your-domain.com`) use:
+For a production domain such as `your-domain.com`, configure Google OAuth with:
 
-- Authorized JavaScript origins: `https://your-domain.com`
+- Authorized JavaScript origin: `https://your-domain.com`
 - Authorized redirect URI: `https://your-domain.com/api/v1/auth/google/callback`
 
 And set:
@@ -75,37 +111,67 @@ GOOGLE_REDIRECT_URL=https://your-domain.com/api/v1/auth/google/callback
 FRONTEND_URL=https://your-domain.com
 ```
 
+## Frontend Delivery
+
+Gradlog serves the UI directly from the backend. Static assets live under `gradlog/internal/ui/dist` and are embedded into the Go binary at build time.
+
+That means a single service provides both the API and the web application.
+
+## Python SDK
+
+The Python SDK lives under `sdk/python` and supports creating projects, experiments, runs, metrics, and artifacts.
+
+Install it locally with:
+
+```bash
+cd sdk/python
+pip install -e .
+```
+
+Example:
+
+```python
+import gradlog
+
+client = gradlog.Client(host="http://localhost:8080")
+project = client.get_or_create_project("demo-local")
+experiment = project.get_or_create_experiment("dev-mode-seed")
+
+with experiment.start_run(name="example-run") as run:
+		run.log_metric("loss", 0.42, step=1)
+```
+
+## Gradlog vs MLflow
+
+Gradlog is intentionally opinionated toward smaller, auth-aware self-hosting.
+
+- Smaller deployment footprint
+- Backend implemented in Go
+- Built-in project membership and API-key flows
+- API and UI served from one binary
+
+MLflow remains a good choice when you need its broader ecosystem integrations. Gradlog is aimed at teams that want a simpler self-hosted tracker with built-in access control.
+
 ## Notes
 
 - `JWT_SECRET` is not used.
-- If OAuth is not configured, token-based API key auth still works.
+- If OAuth is not configured, API-key auth still works.
+- The local dev seed path assumes the server is available at `http://localhost:8080` unless `GRADLOG_HOST` is set.
 
-## Dual Licensing
+## Licensing
 
 Gradlog is dual-licensed.
 
-- Open source use: GNU GPL v3 (see [LICENSE](LICENSE)).
-- Commercial use: commercial license terms (see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL)).
-
-### GPL v3 path
-
-You can use Gradlog under GPL v3 for scenarios such as:
-
-- Personal and non-commercial usage
-- Academic and research usage
-- GPL v3-compatible open source projects
-
-### Commercial license path
+- Open source use: GNU GPL v3, see [LICENSE](LICENSE)
+- Commercial use: see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL)
 
 A commercial license is required for uses such as:
 
 - Closed-source or proprietary distribution
-- Hosted/managed SaaS offerings
+- Hosted or managed SaaS offerings
 - Internal commercial platforms that do not comply with GPL v3 obligations
 
-### Commercial licensing contact
-
-For commercial licensing, contact: gradlog@efesirin.com
+For commercial licensing, contact `gradlog@efesirin.com`.
 
 ## Contributing
 

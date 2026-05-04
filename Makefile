@@ -1,4 +1,4 @@
-.PHONY: all build run test clean docker-build docker-up docker-down deps
+.PHONY: all build run test clean docker-build docker-up docker-down deps seed-local-dev
 
 # Default target
 all: build
@@ -41,6 +41,10 @@ dev-setup:
 	cp gradlog/.env.example gradlog/.env
 	@echo "Edit gradlog/.env with your configuration"
 	@echo "Then run: make docker-up"
+
+# Seed demo data into a local DEV_NOAUTH or API-key-authenticated instance.
+seed-local-dev:
+	python3 demo/local_dev_seed.py
 
 # Database operations (requires running PostgreSQL)
 db-migrate:
