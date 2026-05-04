@@ -4,28 +4,36 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Gradlog</title>
-		<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M7 24V12l5 5 5-7 5 9' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+		<link rel="icon" type="image/svg+xml" href="/brandmark.svg?v=20260504a" />
+		<meta name="theme-color" content="#111827" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 		<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
-		<link rel="stylesheet" href="/styles.css?v=20260313a" />
+		<link rel="stylesheet" href="/styles.css?v=20260504a" />
 	</head>
 	<body>
 		<!-- Auth screen -->
 		<section id="authView" class="auth-screen hidden">
 			<div class="auth-card">
 				<div class="auth-logo">
-					<svg width="44" height="44" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M7 24V12l5 5 5-7 5 9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+					<img class="auth-logo-mark" src="/brandmark.svg" alt="Gradlog logo" />
+					<div class="auth-logo-copy">
+						<span class="auth-kicker">Experiment Tracking</span>
+						<h1 class="auth-title">Gradlog</h1>
+					</div>
 				</div>
-				<h1 class="auth-title">Gradlog</h1>
-				<p class="auth-subtitle">ML experiment tracking &amp; collaboration</p>
+				<p class="auth-subtitle">ML experiment tracking, artifact review, and team collaboration in one place.</p>
 				<div class="auth-body">
 					<button id="oauthBtn" class="btn btn-primary btn-lg btn-full">
 						<svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.26c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
 						Continue with Google
 					</button>
+					<a class="auth-repo-link" href="https://github.com/verynewusername/gradlog" target="_blank" rel="noreferrer">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.649.5.5 5.649.5 12a11.5 11.5 0 008.032 10.938c.588.108.802-.255.802-.566 0-.279-.01-1.02-.016-2.002-3.268.71-3.958-1.575-3.958-1.575-.534-1.357-1.304-1.718-1.304-1.718-1.066-.729.081-.714.081-.714 1.178.083 1.798 1.209 1.798 1.209 1.046 1.792 2.744 1.274 3.413.975.106-.758.41-1.274.745-1.567-2.608-.296-5.349-1.304-5.349-5.805 0-1.282.458-2.33 1.208-3.151-.121-.296-.523-1.488.115-3.102 0 0 .985-.315 3.227 1.204a11.233 11.233 0 015.876 0c2.241-1.519 3.225-1.204 3.225-1.204.64 1.614.238 2.806.117 3.102.752.821 1.207 1.869 1.207 3.151 0 4.512-2.745 5.505-5.361 5.794.421.362.796 1.078.796 2.173 0 1.57-.014 2.835-.014 3.221 0 .314.211.68.808.564A11.502 11.502 0 0023.5 12C23.5 5.649 18.351.5 12 .5z"/></svg>
+						<span>View the project on GitHub</span>
+					</a>
 				</div>
 				<p id="authHint" class="auth-hint"></p>
 			</div>
@@ -36,7 +44,7 @@
 			<!-- Top bar -->
 			<header class="topbar">
 				<div class="topbar-left">
-					<svg class="topbar-logo" width="24" height="24" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M7 24V12l5 5 5-7 5 9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+					<img class="topbar-logo" src="/brandmark.svg" alt="" />
 					<span class="topbar-brand">Gradlog</span>
 				</div>
 				<div class="topbar-actions">
@@ -331,6 +339,6 @@
 		</div>
 
 		<div id="toast" class="toast hidden"></div>
-		<script src="/app.js?v=20260313a"></script>
+		<script src="/app.js?v=20260504a"></script>
 	</body>
 </html>

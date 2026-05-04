@@ -456,8 +456,8 @@ func (h *ProjectHandler) AddMember(c *gin.Context) {
 }
 
 // RemoveMember handles DELETE /projects/:id/members/:userId.
-// Removes a user from the project; requires admin or owner role.
-// The project owner cannot be removed.
+// Members may remove themselves from a project unless they are the owner.
+// Removing another user still requires admin or owner role.
 func (h *ProjectHandler) RemoveMember(c *gin.Context) {
 	userID := middleware.GetUserIDFromContext(c)
 	if userID == uuid.Nil {
@@ -477,7 +477,8 @@ func (h *ProjectHandler) RemoveMember(c *gin.Context) {
 		return
 	}
 
-	if !h.userIsAdmin(c, projectID, userID) {
+	isSelfRemoval := userID == targetUserID
+	if !isSelfRemoval && !h.userIsAdmin(c, projectID, userID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
