@@ -124,6 +124,12 @@
     confirmMessage: $("confirmMessage"),
     confirmCancel: $("confirmCancel"),
     confirmOk: $("confirmOk"),
+
+    // Artifact preview dialog
+    artifactPreviewOverlay: $("artifactPreviewOverlay"),
+    artifactPreviewTitle: $("artifactPreviewTitle"),
+    artifactPreviewBody: $("artifactPreviewBody"),
+    artifactPreviewClose: $("artifactPreviewClose"),
   };
 
   /* ------------------------------------------------------------------ */
@@ -255,6 +261,30 @@
   function closeConfirm(result) {
     el.confirmOverlay.classList.add("hidden");
     if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+  }
+
+  function openArtifactPreview(artifact) {
+    const displayName = getArtifactDisplayName(artifact);
+    el.artifactPreviewTitle.textContent = displayName;
+    el.artifactPreviewBody.innerHTML = '<div class="artifact-preview-modal-loading">Loading image preview…</div>';
+    el.artifactPreviewOverlay.classList.remove("hidden");
+
+    getArtifactPreviewUrl(artifact).then((url) => {
+      if (el.artifactPreviewOverlay.classList.contains("hidden")) return;
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = `${displayName} preview`;
+      el.artifactPreviewBody.innerHTML = "";
+      el.artifactPreviewBody.appendChild(img);
+    }).catch((error) => {
+      if (el.artifactPreviewOverlay.classList.contains("hidden")) return;
+      el.artifactPreviewBody.innerHTML = `<div class="artifact-preview-modal-error">${esc(error.message || "Preview unavailable")}</div>`;
+    });
+  }
+
+  function closeArtifactPreview() {
+    el.artifactPreviewOverlay.classList.add("hidden");
+    el.artifactPreviewBody.innerHTML = "";
   }
 
   /* ------------------------------------------------------------------ */
@@ -913,6 +943,19 @@
       const actions = document.createElement("div");
       actions.className = "artifact-actions";
 
+      if (isPreviewableImage(a)) {
+        const previewBtn = document.createElement("button");
+        previewBtn.type = "button";
+        previewBtn.className = "btn btn-ghost btn-sm";
+        previewBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 4c-4.418 0-8 4.03-8 6s3.582 6 8 6 8-4.03 8-6-3.582-6-8-6zm0 10a4 4 0 100-8 4 4 0 000 8zm0-2.25A1.75 1.75 0 1010 8.25a1.75 1.75 0 000 3.5z" clip-rule="evenodd"/></svg> Preview';
+        previewBtn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openArtifactPreview(a);
+        };
+        actions.appendChild(previewBtn);
+      }
+
       const dlBtn = document.createElement("button");
       dlBtn.type = "button";
       dlBtn.className = "btn btn-ghost btn-sm";
@@ -936,34 +979,6 @@
       row.appendChild(icon);
       row.appendChild(info);
       row.appendChild(actions);
-
-      if (isPreviewableImage(a)) {
-        const preview = document.createElement("div");
-        preview.className = "artifact-preview";
-
-        const previewShell = document.createElement("div");
-        previewShell.className = "artifact-preview-shell";
-
-        const loading = document.createElement("div");
-        loading.className = "artifact-preview-loading";
-        loading.textContent = "Loading image preview…";
-        previewShell.appendChild(loading);
-        preview.appendChild(previewShell);
-        row.appendChild(preview);
-
-        getArtifactPreviewUrl(a).then((url) => {
-          if (!row.isConnected) return;
-          previewShell.innerHTML = "";
-          const img = document.createElement("img");
-          img.src = url;
-          img.alt = `${displayName} preview`;
-          img.loading = "lazy";
-          previewShell.appendChild(img);
-        }).catch((error) => {
-          if (!row.isConnected) return;
-          previewShell.innerHTML = `<div class="artifact-preview-error">${esc(error.message || "Preview unavailable")}</div>`;
-        });
-      }
 
       el.artifactList.appendChild(row);
     });
@@ -1841,6 +1856,14 @@
     onClick(el.confirmCancel, () => closeConfirm(false));
     onClick(el.confirmOk, () => closeConfirm(true));
     onClick(el.confirmOverlay, (e) => { if (e.target === el.confirmOverlay) closeConfirm(false); });
+    onClick(el.artifactPreviewClose, () => closeArtifactPreview());
+    onClick(el.artifactPreviewOverlay, (e) => { if (e.target === el.artifactPreviewOverlay) closeArtifactPreview(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeConfirm(false);
+        closeArtifactPreview();
+      }
+    });
 
     // Project form
     onClick(el.newProjectBtn, () => el.projectFormWrap.classList.toggle("hidden"));

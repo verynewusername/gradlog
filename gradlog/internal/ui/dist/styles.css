@@ -755,39 +755,6 @@ select { cursor: pointer; }
 }
 .artifact-meta { font-size: 11px; color: var(--text-3); }
 .artifact-actions { display: flex; gap: 4px; flex-shrink: 0; }
-.artifact-preview {
-  grid-column: 1 / -1;
-  padding-left: 44px;
-}
-.artifact-preview-shell {
-  width: min(100%, 420px);
-  min-height: 120px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background:
-    linear-gradient(45deg, transparent 25%, rgba(148, 163, 184, .12) 25%, rgba(148, 163, 184, .12) 50%, transparent 50%, transparent 75%, rgba(148, 163, 184, .12) 75%),
-    var(--surface-alt);
-  background-size: 16px 16px;
-  overflow: hidden;
-  box-shadow: var(--shadow-xs);
-}
-.artifact-preview-shell img {
-  display: block;
-  width: 100%;
-  max-height: 320px;
-  object-fit: contain;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-}
-.artifact-preview-loading,
-.artifact-preview-error {
-  min-height: 120px;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  font-size: 12px;
-}
-.artifact-preview-loading { color: var(--text-3); }
-.artifact-preview-error { color: var(--red); }
 
 /* --- Upload -------------------------------------------------------- */
 .upload-btn {
@@ -988,6 +955,48 @@ select { cursor: pointer; }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--text); }
 .modal-message { font-size: 13px; color: var(--text-2); line-height: 1.6; margin-bottom: 20px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.artifact-preview-modal {
+  max-width: min(92vw, 980px);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+.artifact-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.artifact-preview-modal-body {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(45deg, transparent 25%, rgba(148, 163, 184, .12) 25%, rgba(148, 163, 184, .12) 50%, transparent 50%, transparent 75%, rgba(148, 163, 184, .12) 75%),
+    var(--surface-alt);
+  background-size: 16px 16px;
+  overflow: auto;
+}
+.artifact-preview-modal-body img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(88vh - 180px);
+  object-fit: contain;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+}
+.artifact-preview-modal-loading,
+.artifact-preview-modal-error {
+  min-height: 220px;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font-size: 13px;
+}
+.artifact-preview-modal-loading { color: var(--text-3); }
+.artifact-preview-modal-error { color: var(--red); }
 
 /* --- Toast --------------------------------------------------------- */
 .toast {
@@ -1051,7 +1060,6 @@ select { cursor: pointer; }
   .auth-logo-copy { align-items: center; text-align: center; }
   .artifact-row { grid-template-columns: auto 1fr; }
   .artifact-actions { grid-column: 1 / -1; justify-content: flex-end; }
-  .artifact-preview { padding-left: 0; }
 }
 @media (max-width: 480px) {
   .topbar { padding: 0 10px; }
@@ -1059,4 +1067,6 @@ select { cursor: pointer; }
   .member-form-row, .apikey-form-row { flex-direction: column; }
   .member-form-row input, .apikey-form-row input { min-width: 0; }
   .run-info-grid { grid-template-columns: 1fr; }
+  .artifact-preview-header { align-items: flex-start; flex-direction: column; }
+  .artifact-preview-modal { padding: 18px; }
 }

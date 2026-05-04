@@ -314,19 +314,13 @@ class Run:
     ) -> dict[str, Any]:
         """Upload a small file in a single request."""
         with open(local_path, "rb") as f:
-            # Remove default Content-Type for multipart upload.
-            headers = dict(self._client._session.headers)
-            if "Content-Type" in headers:
-                del headers["Content-Type"]
-            
-            response = self._client._session.post(
-                self._client._url(f"/api/v1/runs/{self.id}/artifacts/upload"),
-                files={"file": (name, f)},
+            response = self._client.upload(
+                f"/api/v1/runs/{self.id}/artifacts/upload",
+                file=f,
+                filename=name,
                 data={"path": artifact_path},
-                headers=headers,
-                timeout=self._client.timeout,
             )
-            return self._client._handle_response(response).json()
+            return response.json()
 
     def _chunked_upload(
         self,
