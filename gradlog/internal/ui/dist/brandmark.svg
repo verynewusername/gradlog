@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="gradlog-warm" x1="20" y1="24" x2="108" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDBA3B"/>
+      <stop offset="0.45" stop-color="#FF5D5D"/>
+      <stop offset="1" stop-color="#8B3DFF"/>
+    </linearGradient>
+    <linearGradient id="gradlog-cool" x1="28" y1="72" x2="108" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="gradlog-shell" x1="16" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#gradlog-shell)"/>
+  <path d="M26 38H66C83.673 38 98 52.327 98 70" stroke="url(#gradlog-warm)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M26 62H58" stroke="url(#gradlog-warm)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M26 86H48" stroke="url(#gradlog-cool)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M56 86H100" stroke="#E2E8F0" stroke-width="14" stroke-linecap="round"/>
+  <path d="M100 86V92C100 101.941 91.941 110 82 110H48" stroke="#E2E8F0" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

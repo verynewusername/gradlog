@@ -27,6 +27,7 @@
     activeView: "run",       // run | members | apikeys
     activeSidebarTab: "projects",
     charts: {},              // key -> Chart instance
+    artifactPreviewUrls: new Map(),
     refreshTimer: null,
   };
 
@@ -190,6 +191,56 @@
     }
   }
 
+  function getArtifactDisplayName(artifact) {
+    return artifact.path || artifact.file_name || "artifact";
+  }
+
+  function isPreviewableImage(artifact) {
+    const contentType = (artifact.content_type || "").toLowerCase();
+    if (contentType === "image/png" || contentType === "image/jpg" || contentType === "image/jpeg") {
+      return true;
+    }
+    return /\.(png|jpe?g)$/i.test(getArtifactDisplayName(artifact));
+  }
+
+  function clearArtifactPreviewUrls() {
+    state.artifactPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    state.artifactPreviewUrls.clear();
+  }
+
+  function pruneArtifactPreviewUrls() {
+    const activeArtifactIds = new Set(state.artifacts.map((artifact) => artifact.id));
+    state.artifactPreviewUrls.forEach((url, artifactId) => {
+      if (!activeArtifactIds.has(artifactId)) {
+        URL.revokeObjectURL(url);
+        state.artifactPreviewUrls.delete(artifactId);
+      }
+    });
+  }
+
+  async function getArtifactPreviewUrl(artifact) {
+    const cachedUrl = state.artifactPreviewUrls.get(artifact.id);
+    if (cachedUrl) return cachedUrl;
+
+    const headers = {};
+    if (state.token && !state.noauth) {
+      headers.Authorization = `Bearer ${state.token}`;
+    }
+
+    const res = await fetch(`/api/v1/artifacts/${artifact.id}/download`, {
+      headers,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`Preview unavailable (${res.status})`);
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    state.artifactPreviewUrls.set(artifact.id, url);
+    return url;
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Confirm dialog                                                     */
   /* ------------------------------------------------------------------ */
@@ -281,6 +332,8 @@
       el.dropdownEmail.textContent = state.me.email;
       el.userAvatar.src = state.me.picture_url || "";
       el.userAvatar.alt = state.me.name || "";
+    } else {
+      clearArtifactPreviewUrls();
     }
   }
 
@@ -409,6 +462,7 @@
   }
 
   async function selectProject(id) {
+    clearArtifactPreviewUrls();
     state.selectedProjectId = id;
     state.selectedExperimentId = "";
     state.selectedRunId = "";
@@ -524,6 +578,7 @@
   }
 
   async function selectExperiment(id) {
+    clearArtifactPreviewUrls();
     state.selectedExperimentId = id;
     state.selectedRunId = "";
     state.latestMetrics = [];
@@ -622,6 +677,7 @@
   }
 
   function clearRunView() {
+    clearArtifactPreviewUrls();
     el.contentTitle.textContent = "Select a run";
     el.contentSubtitle.textContent = "Choose a project, experiment, and run from the sidebar";
     el.runActions.classList.add("hidden");
@@ -833,12 +889,14 @@
   /*  Artifacts                                                          */
   /* ------------------------------------------------------------------ */
   function renderArtifacts() {
+    pruneArtifactPreviewUrls();
     el.artifactList.innerHTML = "";
     if (!state.artifacts.length) {
       el.artifactList.innerHTML = '<div class="hint" style="padding:8px">No artifacts yet.</div>';
       return;
     }
     state.artifacts.forEach((a) => {
+      const displayName = getArtifactDisplayName(a);
       const row = document.createElement("div");
       row.className = "artifact-row";
 
@@ -848,7 +906,9 @@
 
       const info = document.createElement("div");
       info.className = "artifact-info";
-      info.innerHTML = `<div class="artifact-name">${esc(a.path || a.file_name)}</div><div class="artifact-meta">${fileSizeFmt(a.file_size)} · ${timeFmt(a.created_at)}</div>`;
+      const metaParts = [fileSizeFmt(a.file_size), timeFmt(a.created_at)];
+      if (a.content_type) metaParts.unshift(a.content_type);
+      info.innerHTML = `<div class="artifact-name">${esc(displayName)}</div><div class="artifact-meta">${metaParts.map((part) => esc(part)).join(" · ")}</div>`;
 
       const actions = document.createElement("div");
       actions.className = "artifact-actions";
@@ -876,6 +936,35 @@
       row.appendChild(icon);
       row.appendChild(info);
       row.appendChild(actions);
+
+      if (isPreviewableImage(a)) {
+        const preview = document.createElement("div");
+        preview.className = "artifact-preview";
+
+        const previewShell = document.createElement("div");
+        previewShell.className = "artifact-preview-shell";
+
+        const loading = document.createElement("div");
+        loading.className = "artifact-preview-loading";
+        loading.textContent = "Loading image preview…";
+        previewShell.appendChild(loading);
+        preview.appendChild(previewShell);
+        row.appendChild(preview);
+
+        getArtifactPreviewUrl(a).then((url) => {
+          if (!row.isConnected) return;
+          previewShell.innerHTML = "";
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = `${displayName} preview`;
+          img.loading = "lazy";
+          previewShell.appendChild(img);
+        }).catch((error) => {
+          if (!row.isConnected) return;
+          previewShell.innerHTML = `<div class="artifact-preview-error">${esc(error.message || "Preview unavailable")}</div>`;
+        });
+      }
+
       el.artifactList.appendChild(row);
     });
   }
@@ -1488,6 +1577,11 @@
       el.memberList.innerHTML = '<div class="hint" style="padding:8px">No members.</div>';
       return;
     }
+    const currentMember = state.me
+      ? state.members.find((member) => member.user_id === state.me.id)
+      : null;
+    const canManageMembers = !!currentMember && (currentMember.role === "owner" || currentMember.role === "admin");
+
     state.members.forEach((m) => {
       const row = document.createElement("div");
       row.className = "member-row";
@@ -1509,25 +1603,58 @@
       row.appendChild(info);
       row.appendChild(role);
 
-      // Remove button (not for owner)
-      if (m.role !== "owner") {
-        const delBtn = document.createElement("button");
-        delBtn.className = "btn btn-ghost btn-sm";
-        delBtn.style.color = "var(--red)";
-        delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
-        delBtn.title = "Remove member";
-        delBtn.onclick = async () => {
-          const ok = await confirm("Remove Member", `Remove ${m.name || m.email} from this project?`, "Remove");
+      const isSelf = !!state.me && m.user_id === state.me.id;
+      const canLeave = isSelf && m.role !== "owner";
+      const canRemove = !isSelf && canManageMembers && m.role !== "owner";
+
+      if (canLeave || canRemove) {
+        const actionBtn = document.createElement("button");
+        actionBtn.className = `btn btn-ghost btn-sm member-action-btn ${canLeave ? "member-action-leave" : ""}`.trim();
+        actionBtn.textContent = canLeave ? "Leave" : "Remove";
+        actionBtn.title = canLeave ? "Leave this project" : "Remove member";
+        actionBtn.onclick = async () => {
+          const selectedProject = getSelectedProject();
+          const ok = await confirm(
+            canLeave ? "Leave Project" : "Remove Member",
+            canLeave
+              ? `Leave ${selectedProject?.name || "this project"}? You will lose access until someone re-adds you.`
+              : `Remove ${m.name || m.email} from this project?`,
+            canLeave ? "Leave" : "Remove"
+          );
           if (!ok) return;
           try {
             await api(`/api/v1/projects/${state.selectedProjectId}/members/${m.user_id}`, { method: "DELETE" });
-            toast("Member removed");
-            await loadMembers();
+            if (canLeave) {
+              clearArtifactPreviewUrls();
+              state.selectedProjectId = "";
+              state.selectedExperimentId = "";
+              state.selectedRunId = "";
+              state.members = [];
+              state.experiments = [];
+              state.runs = [];
+              state.artifacts = [];
+              state.latestMetrics = [];
+              state.metricsGrouped = [];
+              destroyCharts();
+              clearRunView();
+              await loadProjects();
+              if (state.projects.length) {
+                await selectProject(state.projects[0].id);
+              } else {
+                renderExperiments();
+                renderRuns();
+                await loadMembers();
+              }
+              toast("You left the project");
+            } else {
+              toast("Member removed");
+              await loadMembers();
+            }
           } catch (e) {
             toast(e.message, true);
           }
         };
-        row.appendChild(delBtn);
+        row.appendChild(actionBtn);
       }
 
       el.memberList.appendChild(row);
